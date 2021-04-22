@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi"
+	"github.com/jamesrr39/go-tracing"
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/logpkg"
 	"github.com/jamesrr39/ownmap-app/ownmap"
@@ -51,6 +52,10 @@ func (ts *TileService) getStyle(styleID string) (styling.Style, errorsx.Error) {
 }
 
 func (ts *TileService) handleGetTile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	setupSpan := tracing.StartSpan(ctx, "setup")
+
 	if ts.shouldProfile {
 		defer profile.Start().Stop()
 	}
@@ -81,11 +86,16 @@ func (ts *TileService) handleGetTile(w http.ResponseWriter, r *http.Request) {
 	ts.sema.Add()
 	defer ts.sema.Done()
 
-	img, err := ts.rasterer.RenderRaster(ts.dbConnSet, size, bounds, ownmap.ZoomLevel(z), style)
+	setupSpan.End(ctx)
+
+	img, err := ts.rasterer.RenderRaster(ctx, ts.dbConnSet, size, bounds, ownmap.ZoomLevel(z), style)
 	if err != nil {
 		errorsx.HTTPError(w, ts.logger, errorsx.Wrap(err), 500)
 		return
 	}
+
+	encodeSpan := tracing.StartSpan(ctx, "png encode")
+	defer encodeSpan.End(ctx)
 
 	err = png.Encode(w, img)
 	if err != nil {

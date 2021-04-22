@@ -1,0 +1,20 @@
+syntax = "proto3";
+package github.com.jamesrr39.tracing;
+
+import "vendor/github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+option go_package = "tracing";
+
+message Trace {
+    string name = 1;
+    string summary = 2;
+    int64 start_time_nanos = 3 [(gogoproto.customname) = "StartTimeNanos", (gogoproto.jsontag) = "startTimeNanos"];
+    int64 end_time_nanos = 4 [(gogoproto.customname) = "EndTimeNanos", (gogoproto.jsontag) = "endTimeNanos"];
+    repeated Span spans = 5;
+}
+
+message Span {
+    string name = 1;
+    int64 start_time_nanos = 2 [(gogoproto.customname) = "StartTimeNanos", (gogoproto.jsontag) = "startTimeNanos"];
+    int64 end_time_nanos = 3 [(gogoproto.customname) = "EndTimeNanos", (gogoproto.jsontag) = "endTimeNanos"];
+}

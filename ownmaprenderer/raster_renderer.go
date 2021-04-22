@@ -1,6 +1,7 @@
 package ownmaprenderer
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"image/color"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
+	"github.com/jamesrr39/go-tracing"
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/ownmap"
 	"github.com/jamesrr39/ownmap-app/ownmapdal"
@@ -57,7 +59,7 @@ var placeTagKey = &ownmapdal.TagKeyWithType{
 	TagKey:     "place",
 }
 
-func (rr *RasterRenderer) RenderRaster(dbConnSet *ownmapdal.DBConnSet, size image.Rectangle, bounds osm.Bounds, zoomLevel ownmap.ZoomLevel, style styling.Style) (image.Image, errorsx.Error) {
+func (rr *RasterRenderer) RenderRaster(ctx context.Context, dbConnSet *ownmapdal.DBConnSet, size image.Rectangle, bounds osm.Bounds, zoomLevel ownmap.ZoomLevel, style styling.Style) (image.Image, errorsx.Error) {
 	var err error
 
 	// TODO: remove filter, or have filter defined by style
@@ -115,6 +117,8 @@ func (rr *RasterRenderer) RenderRaster(dbConnSet *ownmapdal.DBConnSet, size imag
 		},
 	}
 
+	dbConnsSpan := tracing.StartSpan(ctx, "get dbConns")
+
 	dbConns, err := dbConnSet.GetConnsForBounds(bounds)
 	if err != nil {
 		return nil, errorsx.Wrap(err)
@@ -123,6 +127,10 @@ func (rr *RasterRenderer) RenderRaster(dbConnSet *ownmapdal.DBConnSet, size imag
 	if len(dbConns) == 0 {
 		return rr.RenderTextTile(size, "(no data found)")
 	}
+
+	dbConnsSpan.End(ctx)
+
+	getDataSpan := tracing.StartSpan(ctx, "get data")
 
 	nodeMap := make(ownmapdal.TagNodeMap)
 	wayMap := make(ownmapdal.TagWayMap)
@@ -202,6 +210,8 @@ func (rr *RasterRenderer) RenderRaster(dbConnSet *ownmapdal.DBConnSet, size imag
 
 	wg.Wait()
 
+	getDataSpan.End(ctx)
+
 	if err != nil {
 		return nil, errorsx.Wrap(err)
 	}
@@ -212,7 +222,7 @@ func (rr *RasterRenderer) RenderRaster(dbConnSet *ownmapdal.DBConnSet, size imag
 		return rr.RenderTextTile(size, "(no data found)")
 	}
 
-	return rr.drawMap(nodeMap, wayMap, relationMap, size, bounds, zoomLevel, style)
+	return rr.drawMap(ctx, nodeMap, wayMap, relationMap, size, bounds, zoomLevel, style)
 }
 
 const (
@@ -284,7 +294,10 @@ func (rr *RasterRenderer) addNearbyPlaces(
 	return nil
 }
 
-func (rr *RasterRenderer) drawMap(nodeMap ownmapdal.TagNodeMap, waysMap ownmapdal.TagWayMap, relationMap ownmapdal.TagRelationMap, size image.Rectangle, bounds osm.Bounds, zoomLevel ownmap.ZoomLevel, style styling.Style) (image.Image, errorsx.Error) {
+func (rr *RasterRenderer) drawMap(ctx context.Context, nodeMap ownmapdal.TagNodeMap, waysMap ownmapdal.TagWayMap, relationMap ownmapdal.TagRelationMap, size image.Rectangle, bounds osm.Bounds, zoomLevel ownmap.ZoomLevel, style styling.Style) (image.Image, errorsx.Error) {
+	drawMapSpan := tracing.StartSpan(ctx, "drawMap")
+	defer drawMapSpan.End(ctx)
+
 	bgColor := style.GetBackground()
 
 	img := NewImageWithBackground(size, bgColor)

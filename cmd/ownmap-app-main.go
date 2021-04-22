@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	tracing "github.com/jamesrr39/go-tracing"
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/httpextra"
@@ -75,6 +76,7 @@ func ensureDefaultPathsConfig() (*ownmapdal.PathsConfig, errorsx.Error) {
 		DataDir:         filepath.Join(rootDir, "data_files"),
 		RawDataFilesDir: filepath.Join(rootDir, "raw_data_files"),
 		TempDir:         filepath.Join(rootDir, "tmp"),
+		TraceDir:        filepath.Join(rootDir, "trace"),
 	}
 
 	err = pathsConfig.EnsurePaths()
@@ -500,8 +502,29 @@ func createServer(dbConns *ownmapdal.DBConnSet, styleSet *styling.StyleSet, path
 		return nil, errorsx.Wrap(err)
 	}
 
+	var traceDirPath string
+	if pathsConfig == nil {
+		traceDirPath, err = ioutil.TempDir("", "")
+		if err != nil {
+			return nil, errorsx.Wrap(err)
+		}
+	} else {
+		traceDirPath = pathsConfig.TraceDir
+	}
+
+	traceFilePath := filepath.Join(traceDirPath, fmt.Sprintf("trace_%s.pbf", time.Now().Format("2006-01-02__03_04_05")))
+	logger.Info("tracing at %q", traceFilePath)
+
+	traceFile, err := os.Create(traceFilePath)
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+
+	tracer := tracing.NewTracer(traceFile)
+
 	router := chi.NewRouter()
 	router.Use(middleware.DefaultLogger)
+	router.Use(tracing.Middleware(tracer))
 	router.Route("/api/", func(r chi.Router) {
 		r.Mount("/info", webservices.NewInfoService(logger, dbConns, styleSet))
 		r.Mount("/tiles/", webservices.NewTileService(logger, dbConns, renderer, styleSet, shouldProfile))

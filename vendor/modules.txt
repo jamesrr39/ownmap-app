@@ -39,9 +39,14 @@ github.com/gogo/protobuf/protoc-gen-gogo/descriptor
 github.com/golang/freetype
 github.com/golang/freetype/raster
 github.com/golang/freetype/truetype
+# github.com/google/uuid v1.2.0
+github.com/google/uuid
 # github.com/jamesrr39/go-snapshot-testing v0.0.0-20210417135521-a5ca70c087bc
 ## explicit
 github.com/jamesrr39/go-snapshot-testing
+# github.com/jamesrr39/go-tracing v0.0.0-20210421161057-86ebf4e7fcc6
+## explicit
+github.com/jamesrr39/go-tracing
 # github.com/jamesrr39/goutil v0.0.0-20210417135610-f7ebfe4dda4d
 ## explicit
 github.com/jamesrr39/goutil/algorithms
@@ -57,6 +62,7 @@ github.com/jamesrr39/goutil/httpextra
 github.com/jamesrr39/goutil/humanise
 github.com/jamesrr39/goutil/logpkg
 github.com/jamesrr39/goutil/open
+github.com/jamesrr39/goutil/streamtostorage
 github.com/jamesrr39/goutil/userextra
 github.com/jamesrr39/goutil/validation
 # github.com/jamesrr39/semaphore v0.0.0-20180521202200-0d5ddc396086
