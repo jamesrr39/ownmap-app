@@ -1,0 +1,8 @@
+{
+    "files.watcherExclude": {
+        "**/data/**": true
+    },
+    "files.exclude": {
+        "data/**": true
+    }
+}

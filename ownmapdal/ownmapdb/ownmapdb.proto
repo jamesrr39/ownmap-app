@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package github.com.jamesrr39.ownmapapp.ownmapdal.ownmapdb;
+
+import "vendor/github.com/gogo/protobuf/gogoproto/gogo.proto";
+import "ownmap/ownmap.proto";
+
+option go_package = "ownmapdal/ownmapdb";
+
+message Header {
+    uint64 version = 1;
+    ownmap.DatasetInfo dataset_info = 2 [(gogoproto.customname) = "DatasetInfo", (gogoproto.jsontag) = "datasetInfo"];
+    SectionMetadata nodes_section_metadata = 3  [(gogoproto.customname) = "NodesSectionMetadata", (gogoproto.jsontag) = "nodesSectionMetadata"];
+    SectionMetadata ways_section_metadata = 4  [(gogoproto.customname) = "WaysSectionMetadata", (gogoproto.jsontag) = "waysSectionMetadata"];
+    SectionMetadata tag_index_section_metadata = 5  [(gogoproto.customname) = "TagIndexSectionMetadata", (gogoproto.jsontag) = "tagIndexSectionMetadata"];
+    SectionMetadata relations_section_metadata = 6  [(gogoproto.customname) = "RelationsSectionMetadata", (gogoproto.jsontag) = "relationsSectionMetadata"];
+}
+
+message BlockMetadata {
+    int64 start_offset_from_start_of_section_data = 1 [(gogoproto.customname) = "StartOffsetFromStartOfSectionData", (gogoproto.jsontag) = "startOffsetFromStartOfSectionData"]; // offset from start of section data
+    bytes last_item_in_block_value = 2 [(gogoproto.customname) = "LastItemInBlockValue", (gogoproto.jsontag) = "lastItemInBlockValue"];
+    int64 block_size = 3 [(gogoproto.customname) = "BlockSize", (gogoproto.jsontag) = "blockSize"];
+}
+
+message SectionMetadata {
+    uint64 total_size = 1 [(gogoproto.customname) = "TotalSize", (gogoproto.jsontag) = "totalSize"];
+    repeated BlockMetadata block_metadatas = 2 [(gogoproto.customname) = "BlockMetadatas", (gogoproto.jsontag) = "blockMetadatas"];
+}
+
+message NodesBlockData {
+    repeated ownmap.OSMNode nodes = 1;
+}
+
+message WaysBlockData {
+    repeated ownmap.OSMWay ways = 1;
+}
+
+message RelationsBlockData {
+    repeated ownmap.OSMRelation relations = 1;
+}
+
+message TagIndexRecord {
+    bytes index_key = 1 [(gogoproto.customname) = "IndexKey", (gogoproto.jsontag) = "indexKey"];
+    repeated int64 item_ids = 2 [(gogoproto.customname) = "ItemIDs", (gogoproto.jsontag) = "itemIds"];
+}
+
+message TagIndexBlockData {
+    repeated TagIndexRecord tag_index_records = 1 [(gogoproto.customname) = "TagIndexRecords", (gogoproto.jsontag) = "tagIndexRecords"];
+}

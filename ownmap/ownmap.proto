@@ -1,0 +1,78 @@
+syntax = "proto3";
+package ownmap;
+option go_package = "github.com/jamesrr39/ownmap-app/ownmap";
+
+import "vendor/github.com/gogo/protobuf/gogoproto/gogo.proto";
+
+message OSMNode {
+	int64 id = 1 [(gogoproto.customname) = "ID"];
+	repeated OSMTag tags = 2;
+	double lat = 3;
+	double lon = 4;
+}
+
+message OSMTag {
+	string key = 1;
+	string value = 2;
+}
+
+message Location {
+	double lat = 1;
+	double lon = 2;
+}
+
+message WayPoint {
+	int64 node_id = 1 [(gogoproto.customname) = "NodeID", (gogoproto.jsontag) = "nodeId"];
+	Location point = 2;
+}
+
+message OSMWay {
+    int64 id = 1 [(gogoproto.customname) = "ID"];
+    repeated OSMTag tags = 2;
+	repeated WayPoint way_points = 3 [(gogoproto.customname) = "WayPoints", (gogoproto.jsontag) = "wayPoints"];
+}
+
+message OSMRelationMember {
+	int64 object_id = 1 [(gogoproto.customname) = "ObjectID", (gogoproto.jsontag) = "objectId"];
+	enum OSMMemberType {
+		OSM_MEMBER_TYPE_UNKNOWN = 0;
+		OSM_MEMBER_TYPE_NODE = 1;
+		OSM_MEMBER_TYPE_WAY = 2;
+		OSM_MEMBER_TYPE_RELATION = 3;
+	}
+	OSMMemberType member_type = 2 [(gogoproto.customname) = "MemberType", (gogoproto.jsontag) = "memberType"];
+	string role = 3;
+	enum OSMMemberOrientation {
+		OSM_MEMBER_ORIENTATION_UNKNOWN = 0;
+		OSM_MEMBER_ORIENTATION_CLOCKWISE = 1;
+		OSM_MEMBER_ORIENTATION_COUNTER_CLOCKWISE = 2;
+	}
+	OSMMemberOrientation orientation = 4;
+}
+
+message OSMRelation {
+	int64 id = 1 [(gogoproto.customname) = "ID"];
+	repeated OSMTag tags = 2;
+    repeated OSMRelationMember members = 3;
+}
+
+message IndexIDList {
+	repeated int64 ids = 1 [(gogoproto.customname) = "IDs"];
+}
+
+message DatasetInfo {
+	message Bounds {
+		double min_lat = 1 [(gogoproto.customname) = "MinLat", (gogoproto.jsontag) = "minLat"];
+		double max_lat = 2 [(gogoproto.customname) = "MaxLat", (gogoproto.jsontag) = "maxLat"];
+		double min_lon = 3 [(gogoproto.customname) = "MinLon", (gogoproto.jsontag) = "minLon"];
+		double max_lon = 4 [(gogoproto.customname) = "MaxLon", (gogoproto.jsontag) = "maxLon"];
+	}
+	Bounds bounds = 1;
+
+	uint64 replication_time_ms = 2 [(gogoproto.customname) = "ReplicationTimeMs", (gogoproto.jsontag) = "replicationTimeMs"];
+};
+
+message KVPair {
+    bytes key = 1;
+    bytes value = 2;
+}

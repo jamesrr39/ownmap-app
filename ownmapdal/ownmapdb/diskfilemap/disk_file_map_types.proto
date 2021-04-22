@@ -1,0 +1,11 @@
+syntax="proto3";
+
+package github.com.jamesrr39.ownmapapp.ownmapdal.ownmapdb.diskfilemap;
+
+import "ownmap/ownmap.proto";
+
+option go_package = "ownmapdal/ownmapdb/diskfilemap";
+
+message BucketData {
+    repeated ownmap.KVPair items = 1;
+}

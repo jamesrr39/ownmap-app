@@ -1,0 +1,33 @@
+<html>
+    <head>
+        <link rel="stylesheet" href="leaflet.css"
+    integrity="sha512-puBpdR0798OZvTTbP4A8Ix/l+A4dHDD0DGqYW6RQ+9jxkRFclaxxQb/SJAWZfWAkuyeQUytO7+7N4QKrDh+drA=="
+    crossorigin=""/>
+   <script src="leaflet.js"
+   integrity="sha512-QVftwZFqvtRNi0ZyCtsznlKSWOStnDORoefr1enyq5mVL4tmKB3S/EnC3rRJcxCPavG10IcrVGSmPh6Qw5lwrg=="
+   crossorigin=""></script>
+   <style>
+   #mapid { height: 800px; }
+   #debug-info {
+       background-color: rgb(17, 67, 94);
+       color: white;
+   }
+   </style>
+    </head>
+    <body>
+        <div>
+            <p>
+                <a href="/admin/">Admin - upload data files, view configurations, browse databases</a>
+            </p>
+            <p>
+                <label>
+                    Style picker
+                    <select id="style-picker"></select>
+                </label>
+            </p>
+        </div>
+        <div id="mapid"></div>
+        <div id="debug-info"></div>
+        <script src="main.js"></script>
+    </body>
+</html>
