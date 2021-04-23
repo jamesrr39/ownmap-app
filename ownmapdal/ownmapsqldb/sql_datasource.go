@@ -1,6 +1,7 @@
 package ownmapsqldb
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -68,7 +69,7 @@ func (db *MapmakerSQLDB) DatasetInfo() (*ownmap.DatasetInfo, errorsx.Error) {
 	return datasetInfo, nil
 }
 
-func (db *MapmakerSQLDB) GetInBounds(bounds osm.Bounds, filter *ownmapdal.GetInBoundsFilter) (ownmapdal.TagNodeMap, ownmapdal.TagWayMap, ownmapdal.TagRelationMap, errorsx.Error) {
+func (db *MapmakerSQLDB) GetInBounds(ctx context.Context, bounds osm.Bounds, filter *ownmapdal.GetInBoundsFilter) (ownmapdal.TagNodeMap, ownmapdal.TagWayMap, ownmapdal.TagRelationMap, errorsx.Error) {
 	var whereClauseLines []string
 	var args []interface{}
 

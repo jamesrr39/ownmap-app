@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"sort"
 	"sync"
 	"time"
 
@@ -74,7 +75,7 @@ func StartTrace(tracer *Tracer, name string) *Trace {
 func StartSpan(ctx context.Context, name string) *Span {
 	tracerVal := ctx.Value(TracerCtxKey)
 	if tracerVal == nil {
-		panic("Trace: no tracer in context")
+		return nil
 	}
 
 	tracer := tracerVal.(*Tracer)
@@ -88,12 +89,12 @@ func StartSpan(ctx context.Context, name string) *Span {
 func (span *Span) End(ctx context.Context) {
 	traceVal := ctx.Value(TraceCtxKey)
 	if traceVal == nil {
-		panic("Trace: no trace in context")
+		return
 	}
 
 	tracerVal := ctx.Value(TracerCtxKey)
 	if tracerVal == nil {
-		panic("Trace: no tracer in context")
+		return
 	}
 
 	trace := traceVal.(*Trace)
@@ -111,6 +112,10 @@ func (tracer *Tracer) EndTrace(trace *Trace, summary string) error {
 
 	trace.EndTimeNanos = endTime.UnixNano()
 	trace.Summary = summary
+
+	sort.Slice(trace.Spans, func(a, b int) bool {
+		return trace.Spans[a].StartTimeNanos < trace.Spans[b].StartTimeNanos
+	})
 
 	b, err := proto.Marshal(trace)
 	if err != nil {

@@ -173,7 +173,9 @@ func (rr *RasterRenderer) RenderRaster(ctx context.Context, dbConnSet *ownmapdal
 		go func(dbConn *ownmapdal.ChosenConnForBounds) {
 			defer wg.Done()
 
-			nodeMap, wayMap, relationMap, err := dbConn.GetInBounds(bounds, filter)
+			span := tracing.StartSpan(ctx, fmt.Sprintf("data for requested area. Datasource: %q", dbConn.Name()))
+
+			nodeMap, wayMap, relationMap, err := dbConn.GetInBounds(ctx, bounds, filter)
 			if err != nil {
 				if errorsx.Cause(err) == ownmapdal.ErrNoDataAvailable {
 					// no data available, but no error either
@@ -186,18 +188,23 @@ func (rr *RasterRenderer) RenderRaster(ctx context.Context, dbConnSet *ownmapdal
 				return
 			}
 
+			span.End(ctx)
+			span = tracing.StartSpan(ctx, fmt.Sprintf("addNearbyPlaces. Datasource: %q", dbConn.Name()))
+
 			// get place names, which need to be drawn on even for places outside the bounds
 			// TODO: more generic for other things that should also be drawn on, even when outside the bounds
 			extraBoundsFilter := &ownmapdal.GetInBoundsFilter{
 				Objects: []*ownmapdal.TagKeyWithType{placeTagKey},
 			}
 
-			err = rr.addNearbyPlaces(dbConn, nodeMap, bounds, extraBoundsFilter)
+			err = rr.addNearbyPlaces(ctx, dbConn, nodeMap, bounds, extraBoundsFilter)
 			if err != nil {
 				wg.Add(1)
 				errChan <- errorsx.Wrap(err)
 				return
 			}
+
+			span.End(ctx)
 
 			log.Printf("datasource: %q. Nodemap len: %d, Waymap len: %d\n", dbConn.Name(), len(nodeMap), len(wayMap))
 
@@ -231,6 +238,7 @@ const (
 )
 
 func (rr *RasterRenderer) addNearbyPlaces(
+	ctx context.Context,
 	dbConn ownmapdal.DataSourceConn,
 	nodeOccurenceMap ownmapdal.TagNodeMap,
 	requestedBounds osm.Bounds,
@@ -282,7 +290,7 @@ func (rr *RasterRenderer) addNearbyPlaces(
 	}
 
 	for _, bounds := range extraSearchBounds {
-		subRegionNodeOccurenceMap, _, _, err := dbConn.GetInBounds(bounds, extraBoundsFilter)
+		subRegionNodeOccurenceMap, _, _, err := dbConn.GetInBounds(ctx, bounds, extraBoundsFilter)
 		if err != nil {
 			if errorsx.Cause(err) != ownmapdal.ErrNoDataAvailable {
 				return err

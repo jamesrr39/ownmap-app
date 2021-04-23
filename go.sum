@@ -57,6 +57,8 @@ github.com/jamesrr39/go-tracing v0.0.0-20210421055947-b34e56ad20bc h1:/y/wuVxKEo
 github.com/jamesrr39/go-tracing v0.0.0-20210421055947-b34e56ad20bc/go.mod h1:gAEaQ3nPNNW9NwgN1rlgPDTXl0A7zI6f1kqFaNXT6m8=
 github.com/jamesrr39/go-tracing v0.0.0-20210421161057-86ebf4e7fcc6 h1:8/Cx1g7Ekor90p9Tiqh5uV2F1P+mfqdTus+N64CesB4=
 github.com/jamesrr39/go-tracing v0.0.0-20210421161057-86ebf4e7fcc6/go.mod h1:gAEaQ3nPNNW9NwgN1rlgPDTXl0A7zI6f1kqFaNXT6m8=
+github.com/jamesrr39/go-tracing v0.0.0-20210422154132-7e243ee015ee h1:pHXKBSYiJQVgDBj+fNTBm6+B/0iHjcj7oOZNSXQhCNM=
+github.com/jamesrr39/go-tracing v0.0.0-20210422154132-7e243ee015ee/go.mod h1:gAEaQ3nPNNW9NwgN1rlgPDTXl0A7zI6f1kqFaNXT6m8=
 github.com/jamesrr39/goutil v0.0.0-20210414154457-33b6c6a1358f/go.mod h1:g59B990MlwW4KoGM0uLnztHM++R/s1ULKQjoOngttwU=
 github.com/jamesrr39/goutil v0.0.0-20210417135610-f7ebfe4dda4d h1:YpPkUMV30Y/bPuiYrjASxFAaLlfUEeadwoObhRkwc5o=
 github.com/jamesrr39/goutil v0.0.0-20210417135610-f7ebfe4dda4d/go.mod h1:g59B990MlwW4KoGM0uLnztHM++R/s1ULKQjoOngttwU=

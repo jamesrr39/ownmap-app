@@ -2,6 +2,7 @@ package ownmapdb
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"io"
 
@@ -517,7 +518,7 @@ func (db *MapmakerDBConn) addRelationsToRelationMap(
 	return nil
 }
 
-func (db *MapmakerDBConn) GetInBounds(bounds osm.Bounds, filter *ownmapdal.GetInBoundsFilter) (ownmapdal.TagNodeMap, ownmapdal.TagWayMap, ownmapdal.TagRelationMap, errorsx.Error) {
+func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, filter *ownmapdal.GetInBoundsFilter) (ownmapdal.TagNodeMap, ownmapdal.TagWayMap, ownmapdal.TagRelationMap, errorsx.Error) {
 	if filter == nil {
 		return nil, nil, nil, errorsx.Errorf("filter not supplied")
 	}

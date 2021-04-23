@@ -34,6 +34,8 @@ type getNearbyPlacesResponseType struct {
 }
 
 func (s *NearbyThingsWebService) handleGet(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	var err error
 	bounds, err := parseBoundsString(r.URL.Query().Get("bounds"))
 	if err != nil {
@@ -85,7 +87,7 @@ func (s *NearbyThingsWebService) handleGet(w http.ResponseWriter, r *http.Reques
 		go func(conn *ownmapdal.ChosenConnForBounds) {
 			defer wg.Done()
 
-			nodeMap, _, _, err := conn.GetInBounds(*bounds, &ownmapdal.GetInBoundsFilter{
+			nodeMap, _, _, err := conn.GetInBounds(ctx, *bounds, &ownmapdal.GetInBoundsFilter{
 				Objects: []*ownmapdal.TagKeyWithType{desiredTagKey},
 			})
 			if err != nil {

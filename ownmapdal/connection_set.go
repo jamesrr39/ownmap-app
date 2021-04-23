@@ -1,6 +1,7 @@
 package ownmapdal
 
 import (
+	"context"
 	"log"
 	"sync"
 
@@ -15,7 +16,7 @@ type DataSourceConn interface {
 	DatasetInfo() (*ownmap.DatasetInfo, errorsx.Error)
 
 	// Data fetch methods
-	GetInBounds(bounds osm.Bounds, filter *GetInBoundsFilter) (TagNodeMap, TagWayMap, TagRelationMap, errorsx.Error)
+	GetInBounds(ctx context.Context, bounds osm.Bounds, filter *GetInBoundsFilter) (TagNodeMap, TagWayMap, TagRelationMap, errorsx.Error)
 }
 
 type DBConnSet struct {
