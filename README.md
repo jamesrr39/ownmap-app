@@ -19,7 +19,9 @@ Then you should place the downloaded file in `data/sample-pbf-file.pbf`. (Altern
 
 Then run `make run_dev_import`. This will read the pbf file and create a `ownmapdb` file. This contains information from the pbf file, but also sorts the items and contains an index to find things more efficiently given a geographic area.
 
-You can then run `make run_dev_server__basic_style`. This will start a web server. In the logs you can see the address that it is serving on. Open up a web browser and go to that address. You will see ae n interactive slippy map with tiles being served from your tileserver.
+You can then run `make run_dev_server__basic_style`. This will start a web server. In the logs you can see the address that it is serving on. Open up a web browser and go to that address. You will see an interactive slippy map with tiles being served from your tileserver.
+
+Needless to say, 
 
 ### Profiling
 
