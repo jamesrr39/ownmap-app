@@ -1,6 +1,7 @@
 package mapboxglstyle
 
 import (
+	"fmt"
 	"log"
 
 	"github.com/jamesrr39/ownmap-app/ownmap"
@@ -79,6 +80,10 @@ func mapMapboxGLClassToOSMTags(className, sourceLayer string) []*ownmap.OSMTag {
 				{Key: "highway", Value: "unclassified"},
 				{Key: "highway", Value: "residential"},
 			}
+		case "motorway_link", "primary_link", "secondary_link", "tertiary_link", "trunk_link":
+			return []*ownmap.OSMTag{
+				{Key: "highway", Value: className},
+			}
 		case "aeroway":
 			return []*ownmap.OSMTag{
 				{Key: "aeroway", Value: "*"},
@@ -96,10 +101,17 @@ func mapMapboxGLClassToOSMTags(className, sourceLayer string) []*ownmap.OSMTag {
 				{Key: "railway", Value: "*"},
 				{Key: "landuse", Value: "railway"},
 			}
+		case "ferry":
+			return []*ownmap.OSMTag{
+				{Key: "route", Value: "ferry"},
+			}
+		case "cable_car":
+			return []*ownmap.OSMTag{
+				{Key: "aerialway", Value: "cable_car"},
+			}
 		default:
 			// TODO error instead of exit
-			log.Fatalf("unknown className: %q, sourcelayer: %q\n", className, sourceLayer)
-			return nil
+			panic(fmt.Sprintf("unknown className: %q, sourcelayer: %q\n", className, sourceLayer))
 		}
 	case "aeroway", "airport_label", "housenum_label":
 		// OpenStreetMap replication
@@ -114,25 +126,42 @@ func mapMapboxGLClassToOSMTags(className, sourceLayer string) []*ownmap.OSMTag {
 		return []*ownmap.OSMTag{
 			{Key: sourceLayer, Value: className},
 		}
+	case "park":
+		return []*ownmap.OSMTag{
+			{Key: "leisure", Value: "park"},
+		}
+	case "waterway":
+		return []*ownmap.OSMTag{
+			{Key: sourceLayer, Value: className},
+		}
 	default:
-		log.Fatalf("unknown sourcelayer: %q (className: %q)\n", sourceLayer, className)
+		log.Printf("unknown sourcelayer: %q (className: %q)\n", sourceLayer, className)
 		return nil
 	}
 }
 
 func mapMapboxGLSubclassToOSMTags(subclassName, sourceLayer string) []*ownmap.OSMTag {
-	switch subclassName {
-	case "ice_shelf":
-		return []*ownmap.OSMTag{
-			{Key: "glacier:type", Value: "shelf"},
+	switch sourceLayer {
+	case "landcover":
+		switch subclassName {
+		case "ice_shelf":
+			return []*ownmap.OSMTag{
+				{Key: "glacier:type", Value: "shelf"},
+			}
+		case "glacier":
+			return []*ownmap.OSMTag{
+				{Key: "natural", Value: "glacier"},
+			}
 		}
-	case "glacier":
-		return []*ownmap.OSMTag{
-			{Key: "natural", Value: "glacier"},
+	case "poi":
+		switch subclassName {
+		case "station":
+			return []*ownmap.OSMTag{
+				{Key: "building", Value: "train_station"},
+			}
 		}
-	default:
-		panic("unknown subclassName: " + subclassName)
 	}
+	panic(fmt.Sprintf("unknown subclassObject:: subClassName: %q, sourceLayer: %q", subclassName, sourceLayer))
 }
 
 func areTagsInSourceLayer(sourceLayer string, tags []*ownmap.OSMTag) bool {

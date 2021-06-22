@@ -502,6 +502,10 @@ func (db *MapmakerDBConn) addRelationsToRelationMap(
 
 	mustRescanRelations := false
 	for _, relation := range relationMap {
+		if relation == nil {
+			// skip; probably the relation we are looking for is outside the bounds of the data file
+			continue
+		}
 		for _, member := range relation.Members {
 			switch member.MemberType {
 			case ownmap.OSM_MEMBER_TYPE_NODE:

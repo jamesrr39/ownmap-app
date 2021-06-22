@@ -380,7 +380,6 @@ type FilterContainer struct {
 }
 
 func (f *FilterContainer) UnmarshalJSON(data []byte) error {
-	println("data::", string(data))
 	filter, err := unmarshalFilter(data)
 	if err != nil {
 		return errorsx.Wrap(err)
@@ -423,10 +422,6 @@ func unmarshalFilter(data []byte) (Filter, error) {
 			subFilters: []Filter{}, // initialise an object for [] serialisation to JSON
 		}
 		for _, subFilterJSON := range fi[1:] {
-			println(string(subFilterJSON))
-			// TODO this doesn't work: subFilterJSON bytes
-			// ["==", "$type", "Polygon"]
-			// err = json.Unmarshal(subFilterJSON, &filter.subFilters)
 			subFilter, err := unmarshalFilter(subFilterJSON)
 			if err != nil {
 				return nil, errorsx.Wrap(err)

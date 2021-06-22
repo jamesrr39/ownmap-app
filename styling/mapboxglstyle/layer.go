@@ -2,6 +2,7 @@ package mapboxglstyle
 
 import (
 	"image/color"
+	"log"
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/ownmap"
@@ -54,52 +55,64 @@ func (l *Layer) Validate() errorsx.Error {
 }
 
 func (l *Layer) GetLayerNodeStyle(node *ownmap.OSMNode, zoomLevel ownmap.ZoomLevel, layerIndex int) *styling.NodeStyle {
-	switch l.SourceLayer {
-	case SourceLayerPlace:
+	switch l.Type {
+	case "symbol":
+		switch l.SourceLayer {
+		case SourceLayerPlace:
 
-		shown := l.Filter.IsObjectShown(l.SourceLayer, node.Tags, ownmap.ObjectTypeNode)
+			shown := l.Filter.IsObjectShown(l.SourceLayer, node.Tags, ownmap.ObjectTypeNode)
+			if !shown {
+				return nil
+			}
+
+			return &styling.NodeStyle{
+				TextSize:  int(l.Layout.TextSize.GetValueAtZoomLevel(zoomLevel)),
+				TextColor: l.Paint.TextColor.GetColorAtZoomLevel(zoomLevel),
+				ZIndex:    layerIndex,
+			}
+		}
+	default:
+		log.Printf("unhandled node layer type: %q", l.Type)
+	}
+
+	return nil
+}
+
+func (l *Layer) GetLayerWayStyle(tags []*ownmap.OSMTag, zoomLevel ownmap.ZoomLevel, layerIndex int) *styling.WayStyle {
+	switch l.Type {
+	case "line", "symbol":
+		tagsInSourceLayer := areTagsInSourceLayer(l.SourceLayer, tags)
+		if !tagsInSourceLayer {
+			// OSM Way doesn't "belong" in this sourceLayer, skip everything
+			return nil
+		}
+
+		shown := l.Filter.IsObjectShown(l.SourceLayer, tags, ownmap.ObjectTypeWay)
 		if !shown {
 			return nil
 		}
 
-		return &styling.NodeStyle{
-			TextSize:  int(l.Layout.TextSize.GetValueAtZoomLevel(zoomLevel)),
-			TextColor: l.Paint.TextColor.GetColorAtZoomLevel(zoomLevel),
-			ZIndex:    layerIndex,
+		fillColor := l.Paint.FillColor.GetColorAtZoomLevel(zoomLevel)
+		lineColor := l.Paint.LineColor.GetColorAtZoomLevel(zoomLevel)
+		lineWidth := l.Paint.LineWidth.GetValueAtZoomLevel(zoomLevel)
+
+		if (lineColor == nil || lineWidth == 0) && fillColor == nil {
+			// there is neither a line or fill color, so don't show this item
+			return nil
+		}
+
+		return &styling.WayStyle{
+			FillColor:      fillColor,
+			LineColor:      lineColor,
+			LineDashPolicy: l.Paint.LineDashArray,
+			LineWidth:      lineWidth,
+			ZIndex:         layerIndex,
 		}
 	default:
-		return nil
-	}
-}
-
-func (l *Layer) GetLayerWayStyle(tags []*ownmap.OSMTag, zoomLevel ownmap.ZoomLevel, layerIndex int) *styling.WayStyle {
-	tagsInSourceLayer := areTagsInSourceLayer(l.SourceLayer, tags)
-	if !tagsInSourceLayer {
-		// OSM Way doesn't "belong" in this sourceLayer, skip everything
-		return nil
+		log.Printf("unhandled way layer type: %q", l.Type)
 	}
 
-	shown := l.Filter.IsObjectShown(l.SourceLayer, tags, ownmap.ObjectTypeWay)
-	if !shown {
-		return nil
-	}
-
-	fillColor := l.Paint.FillColor.GetColorAtZoomLevel(zoomLevel)
-	lineColor := l.Paint.LineColor.GetColorAtZoomLevel(zoomLevel)
-	lineWidth := l.Paint.LineWidth.GetValueAtZoomLevel(zoomLevel)
-
-	if (lineColor == nil || lineWidth == 0) && fillColor == nil {
-		// there is neither a line or fill color, so don't show this item
-		return nil
-	}
-
-	return &styling.WayStyle{
-		FillColor:      fillColor,
-		LineColor:      lineColor,
-		LineDashPolicy: l.Paint.LineDashArray,
-		LineWidth:      lineWidth,
-		ZIndex:         layerIndex,
-	}
+	return nil
 }
 
 type Light struct {
