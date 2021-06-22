@@ -5,6 +5,7 @@ import (
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/ownmap"
+	"github.com/jamesrr39/ownmap-app/ownmapdal"
 )
 
 const BUILTIN_STYLEID = "__ownmap_builtin"
@@ -49,6 +50,7 @@ type Style interface {
 	GetRelationStyle(relationData *ownmap.RelationData, zoomLevel ownmap.ZoomLevel) (*RelationStyle, errorsx.Error)
 	GetBackground() color.Color
 	GetStyleID() string
+	GetWantedObjects(zoomLevel ownmap.ZoomLevel) []*ownmapdal.TagKeyWithType
 }
 
 type StyleSet struct {

@@ -26,7 +26,7 @@ func Test_drawWay(t *testing.T) {
 			Y: 10,
 		},
 	})
-	draw.Draw(img, img.Bounds(), image.NewUniform(color.White), image.ZP, draw.Src)
+	draw.Draw(img, img.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
 
 	bounds := osm.Bounds{
 		MinLat: 2,
@@ -34,11 +34,7 @@ func Test_drawWay(t *testing.T) {
 		MinLon: 10,
 		MaxLon: 12,
 	}
-	way := &ownmap.OSMWay{
-		ID:        1,
-		Tags:      nil,
-		WayPoints: nil,
-	}
+	way := []*ownmap.WayPoint{}
 
 	err := drawWay(img, bounds, way, &styling.WayStyle{LineColor: color.Black})
 	require.NoError(t, err)

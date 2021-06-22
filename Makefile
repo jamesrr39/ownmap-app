@@ -33,27 +33,27 @@ update_snapshots:
 
 .PHONY: run_dev_server__mapboxgl_style
 run_dev_server__mapboxgl_style:
-	go run cmd/ownmap-app-main.go serve ownmapdb://data/data_files/sample_database.db --default-style-id="basic" --extra-styles=data/styles/gl-style
+	CGO_ENABLED=0 go run cmd/ownmap-app-main.go serve ownmapdb://data/data_files/sample_database.db --default-style-id="basic" --extra-styles=data/styles/gl-style
 
 .PHONY: run_dev_server__mapboxgl_style_postgres
 run_dev_server__mapboxgl_style_postgres:
-	go run cmd/ownmap-app-main.go serve postgresql://docker:docker@localhost:5432/ownmap?sslmode=disable --default-style-id="basic" --extra-styles=data/styles/gl-style
+	CGO_ENABLED=0 go run cmd/ownmap-app-main.go serve postgresql://docker:docker@localhost:5432/ownmap?sslmode=disable --default-style-id="basic" --extra-styles=data/styles/gl-style
 
 
 .PHONY: run_dev_server__mapboxgl_styles
 run_dev_server__mapboxgl_styles:
-	go run cmd/ownmap-app-main.go serve ownmapdb://data/data_files/sample_database.db --default-style-id="basic" --extra-styles=data/styles/gl-style,data/styles/gl-style-2
+	CGO_ENABLED=0 go run cmd/ownmap-app-main.go serve ownmapdb://data/data_files/sample_database.db --default-style-id="basic" --extra-styles=data/styles/gl-style,data/styles/gl-style2
 
 .PHONY: run_dev_server__basic_style
 run_dev_server__basic_style:
-	go run cmd/ownmap-app-main.go serve ownmapdb://data/data_files/sample_database.db
+	CGO_ENABLED=0 go run cmd/ownmap-app-main.go serve ownmapdb://data/data_files/sample_database.db
 
 # DEV_DOCKER_IMAGE=jamesrr39/run_dev_import_docker
 # MAX_MEMORY=8g
 
 .PHONY: build
 build:
-	go build -o build/default/makmaker cmd/ownmap-app-main.go
+	CGO_ENABLED=0 go build -o build/default/makmaker cmd/ownmap-app-main.go
 
 # .PHONY: run_dev_import_docker
 # run_dev_import_docker:

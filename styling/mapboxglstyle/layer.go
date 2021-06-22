@@ -23,16 +23,16 @@ const (
 )
 
 type Layer struct {
-	Filter      Filter    `json:"filter"`
-	ID          LayerType `json:"id"`
-	Layout      Layout    `json:"layout"`
-	MaxZoom     *float64  `json:"maxzoom"`
-	Metadata    Metadata  `json:"metadata"`
-	MinZoom     *float64  `json:"minzoom"`
-	Paint       *Paint    `json:"paint"`
-	Source      string    `json:"source"`
-	SourceLayer string    `json:"source-layer"`
-	Type        LayerType `json:"type"`
+	Filter      FilterContainer `json:"filter"`
+	ID          LayerType       `json:"id"`
+	Layout      Layout          `json:"layout"`
+	MaxZoom     *float64        `json:"maxzoom"`
+	Metadata    Metadata        `json:"metadata"`
+	MinZoom     *float64        `json:"minzoom"`
+	Paint       *Paint          `json:"paint"`
+	Source      string          `json:"source"`
+	SourceLayer string          `json:"source-layer"`
+	Type        LayerType       `json:"type"`
 }
 
 func (l *Layer) Validate() errorsx.Error {
@@ -56,7 +56,8 @@ func (l *Layer) Validate() errorsx.Error {
 func (l *Layer) GetLayerNodeStyle(node *ownmap.OSMNode, zoomLevel ownmap.ZoomLevel, layerIndex int) *styling.NodeStyle {
 	switch l.SourceLayer {
 	case SourceLayerPlace:
-		shown := isObjectShown(l.Filter, l.SourceLayer, node.Tags, FilterThingTypePoint)
+
+		shown := l.Filter.IsObjectShown(l.SourceLayer, node.Tags, ownmap.ObjectTypeNode)
 		if !shown {
 			return nil
 		}
@@ -78,8 +79,7 @@ func (l *Layer) GetLayerWayStyle(tags []*ownmap.OSMTag, zoomLevel ownmap.ZoomLev
 		return nil
 	}
 
-	shown := isObjectShown(l.Filter, l.SourceLayer, tags, FilterThingTypeLineString)
-
+	shown := l.Filter.IsObjectShown(l.SourceLayer, tags, ownmap.ObjectTypeWay)
 	if !shown {
 		return nil
 	}

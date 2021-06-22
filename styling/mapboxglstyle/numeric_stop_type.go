@@ -22,6 +22,7 @@ func (n *numericStopType) UnmarshalJSON(data []byte) error {
 	}
 
 	n.ZoomLevel = ownmap.ZoomLevel(i[0].(float64))
+	println("data::", string(data))
 	n.Value = i[1].(float64)
 
 	return nil

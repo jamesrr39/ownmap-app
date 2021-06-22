@@ -6,6 +6,20 @@ import (
 	"github.com/jamesrr39/ownmap-app/ownmap"
 )
 
+type TagWithObjectTypes struct {
+	Tag         *ownmap.OSMTag
+	ObjectTypes []ownmap.ObjectType
+}
+
+func getPossibleObjectTypesForOSMTags(tag *ownmap.OSMTag) []ownmap.ObjectType {
+	// TODO
+	return []ownmap.ObjectType{
+		ownmap.ObjectTypeNode,
+		ownmap.ObjectTypeWay,
+		ownmap.ObjectTypeRelation,
+	}
+}
+
 func mapMapboxGLClassToOSMTags(className, sourceLayer string) []*ownmap.OSMTag {
 	switch sourceLayer {
 	case "landuse", "landcover":
@@ -60,7 +74,7 @@ func mapMapboxGLClassToOSMTags(className, sourceLayer string) []*ownmap.OSMTag {
 				{Key: "leisure", Value: "track"},
 				{Key: "cycleway", Value: "track"},
 			}
-		case "minor":
+		case "minor", "minor_road":
 			return []*ownmap.OSMTag{
 				{Key: "highway", Value: "unclassified"},
 				{Key: "highway", Value: "residential"},

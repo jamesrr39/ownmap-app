@@ -4,20 +4,23 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"fmt"
 	"io"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/jamesrr39/go-tracing"
 	"github.com/jamesrr39/goutil/algorithms"
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/ownmap-app/ownmap"
 	"github.com/jamesrr39/ownmap-app/ownmapdal"
 	"github.com/paulmach/osm"
-	"golang.org/x/exp/errors/fmt"
 )
 
 const (
-	blockSize = 8192 // items in block. TODO: make configurable
+	// TODO: make configurable. Clickhouse did some research into random reads for different disk types:
+	// "Our observations show that the best block size for random read is 256 kilobytes for HDD, 4 kilobytes for NVMe and SATA SSD and 8 kilobytes for Intel Optane."
+	blockSize = 8192 // items in block.
 )
 
 type OpenFileFunc func() (gofs.File, errorsx.Error)
@@ -278,8 +281,11 @@ func (db *MapmakerDBConn) addNodesToNodeMap(file io.ReadSeeker, nodeMap map[int6
 	return nil
 }
 
-func getWaysFoundFunc(wayMap map[int64]*ownmap.OSMWay) onFoundBlockDataFuncType {
+func getWaysFoundFunc(ctx context.Context, wayMap map[int64]*ownmap.OSMWay) onFoundBlockDataFuncType {
 	return func(blockDataBytes *bytes.Buffer, wantedKeys []KeyType) errorsx.Error {
+		span := tracing.StartSpan(ctx, fmt.Sprintf("getWaysFoundFunc. block data bytes: %d", blockDataBytes.Len()))
+		defer span.End(ctx)
+
 		blockData := new(WaysBlockData)
 		err := proto.Unmarshal(blockDataBytes.Bytes(), blockData)
 		if err != nil {
@@ -334,7 +340,7 @@ func getRelationsFoundFunc(relationMap map[int64]*ownmap.OSMRelation) onFoundBlo
 	}
 }
 
-func (db *MapmakerDBConn) addWaysToWayMap(file io.ReadSeeker, wayMap map[int64]*ownmap.OSMWay) errorsx.Error {
+func (db *MapmakerDBConn) addWaysToWayMap(ctx context.Context, file io.ReadSeeker, wayMap map[int64]*ownmap.OSMWay) errorsx.Error {
 	// make various data structures needed later in the function
 	var keys []KeyType
 
@@ -346,7 +352,7 @@ func (db *MapmakerDBConn) addWaysToWayMap(file io.ReadSeeker, wayMap map[int64]*
 	err := db.getBlockDatasByIDs(
 		file,
 		keys,
-		getWaysFoundFunc(wayMap),
+		getWaysFoundFunc(ctx, wayMap),
 		db.offsetOfWaySectionFromStartOfFile(),
 		db.header.WaysSectionMetadata,
 		new(int64ItemType),
@@ -579,11 +585,15 @@ func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, fi
 		return nil, nil, nil, errorsx.Wrap(err)
 	}
 
+	span := tracing.StartSpan(ctx, "GetInBounds: add ways")
+
 	// add ways
-	err = db.addWaysToWayMap(file, wayMap)
+	err = db.addWaysToWayMap(ctx, file, wayMap)
 	if err != nil {
 		return nil, nil, nil, errorsx.Wrap(err)
 	}
+
+	span.End(ctx)
 
 	// add nodes
 	err = db.addNodesToNodeMap(file, nodeMap)

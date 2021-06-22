@@ -15,4 +15,7 @@ type Layout struct {
 	TextAnchor            string                       `json:"text-anchor"`
 	TextMaxWidth          float64                      `json:"text-max-width"`
 	TextOffset            []float64                    `json:"text-offset"`
+	SymbolSpacing         float64                      `json:"symbol-spacing"`
+	IconImage             string                       `json:"icon-image"`
+	TextPadding           float64                      `json:"text-padding"`
 }

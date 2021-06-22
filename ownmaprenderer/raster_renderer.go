@@ -62,59 +62,11 @@ var placeTagKey = &ownmapdal.TagKeyWithType{
 func (rr *RasterRenderer) RenderRaster(ctx context.Context, dbConnSet *ownmapdal.DBConnSet, size image.Rectangle, bounds osm.Bounds, zoomLevel ownmap.ZoomLevel, style styling.Style) (image.Image, errorsx.Error) {
 	var err error
 
+	objects := style.GetWantedObjects(zoomLevel)
+
 	// TODO: remove filter, or have filter defined by style
 	filter := &ownmapdal.GetInBoundsFilter{
-		Objects: []*ownmapdal.TagKeyWithType{
-			placeTagKey,
-			{
-				ObjectType: ownmap.ObjectTypeWay,
-				TagKey:     "highway",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeWay,
-				TagKey:     "waterway",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeWay,
-				TagKey:     "water",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeWay,
-				TagKey:     "landuse",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeWay,
-				TagKey:     "natural",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeWay,
-				TagKey:     "railway",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeRelation,
-				TagKey:     "highway",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeRelation,
-				TagKey:     "waterway",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeRelation,
-				TagKey:     "water",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeRelation,
-				TagKey:     "landuse",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeRelation,
-				TagKey:     "natural",
-			},
-			{
-				ObjectType: ownmap.ObjectTypeRelation,
-				TagKey:     "railway",
-			},
-		},
+		Objects: objects,
 	}
 
 	dbConnsSpan := tracing.StartSpan(ctx, "get dbConns")
@@ -340,7 +292,8 @@ func (rr *RasterRenderer) drawMap(ctx context.Context, nodeMap ownmapdal.TagNode
 
 	for tagKey, nodes := range nodeMap {
 		if tagKey != "place" {
-			panic("not implemented tagKey: " + tagKey)
+			log.Printf("not implemented tagKey: %q\n", tagKey)
+			continue
 		}
 		for _, node := range nodes {
 			nodeStyle, err := style.GetNodeStyle(node, zoomLevel)
@@ -394,7 +347,7 @@ func (rr *RasterRenderer) drawMap(ctx context.Context, nodeMap ownmapdal.TagNode
 			}
 		case *styling.WayStyle:
 			way := itemStyleAndItem.Item.(*ownmap.OSMWay)
-			err := drawWay(img, bounds, way, itemStyle)
+			err := drawWay(img, bounds, way.WayPoints, itemStyle)
 			if err != nil {
 				return nil, err
 			}
@@ -416,8 +369,15 @@ func (rr *RasterRenderer) drawMap(ctx context.Context, nodeMap ownmapdal.TagNode
 func drawRelation(img *image.RGBA, bounds osm.Bounds, relationData *ownmap.RelationData, style styling.Style, zoomLevel ownmap.ZoomLevel) errorsx.Error {
 	relationImg := NewImageWithBackground(img.Rect, color.Transparent)
 
-	var outerWay *ownmap.OSMWay
-	var outerWayStyle *styling.WayStyle
+	wayStyle, err := style.GetWayStyle(relationData.Tags, zoomLevel)
+	if err != nil {
+		return err
+	}
+
+	if wayStyle == nil {
+		return nil
+	}
+	var outerWayPoints []*ownmap.WayPoint
 	var innerWays []*ownmap.OSMWay
 
 	for _, m := range relationData.Members {
@@ -427,21 +387,7 @@ func drawRelation(img *image.RGBA, bounds osm.Bounds, relationData *ownmap.Relat
 		case *ownmap.OSMWay:
 			switch m.Role {
 			case "outer":
-				if outerWay != nil {
-					panic(fmt.Sprintf("outer way already non-null. Relation ID: %d, child member: %#v", relationData.RelationID, member))
-				}
-
-				wayStyle, err := style.GetWayStyle(relationData.Tags, zoomLevel)
-				if err != nil {
-					return err
-				}
-
-				if wayStyle == nil {
-					continue
-				}
-
-				outerWay = member
-				outerWayStyle = wayStyle
+				outerWayPoints = append(outerWayPoints, member.WayPoints...)
 			case "inner":
 				innerWays = append(innerWays, member)
 			default:
@@ -452,11 +398,11 @@ func drawRelation(img *image.RGBA, bounds osm.Bounds, relationData *ownmap.Relat
 		}
 	}
 
-	if outerWay == nil {
+	if len(outerWayPoints) == 0 {
 		return nil
 	}
 
-	err := drawWay(relationImg, bounds, outerWay, outerWayStyle)
+	err = drawWay(relationImg, bounds, outerWayPoints, wayStyle)
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
@@ -465,7 +411,7 @@ func drawRelation(img *image.RGBA, bounds osm.Bounds, relationData *ownmap.Relat
 		LineColor: style.GetBackground(),
 	}
 	for _, innerWay := range innerWays {
-		err = drawWay(relationImg, bounds, innerWay, holeInRelationStyle)
+		err = drawWay(relationImg, bounds, innerWay.WayPoints, holeInRelationStyle)
 		if err != nil {
 			return errorsx.Wrap(err)
 		}
@@ -557,12 +503,12 @@ func (rr *RasterRenderer) drawPlace(img draw.Image, bounds osm.Bounds, node *own
 	return nil
 }
 
-func drawWay(img *image.RGBA, bounds osm.Bounds, way *ownmap.OSMWay, lineStyle *styling.WayStyle) errorsx.Error {
+func drawWay(img *image.RGBA, bounds osm.Bounds, wayPoints []*ownmap.WayPoint, lineStyle *styling.WayStyle) errorsx.Error {
 	lonBetweenMinAndMax := bounds.MaxLon - bounds.MinLon
 	latBetweenMinAndMax := bounds.MaxLat - bounds.MinLat
 	var points []*Point
 
-	for _, waypoint := range way.WayPoints {
+	for _, waypoint := range wayPoints {
 		x := (waypoint.Point.Lon - bounds.MinLon) / (lonBetweenMinAndMax)
 		y := (waypoint.Point.Lat - bounds.MinLat) / (latBetweenMinAndMax)
 

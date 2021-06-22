@@ -2,6 +2,7 @@ package mapboxglstyle
 
 import (
 	"encoding/json"
+	"fmt"
 	"image/color"
 	"math"
 	"regexp"
@@ -26,7 +27,7 @@ func (c *ColorType) GetColorAtZoomLevel(zoomLevel ownmap.ZoomLevel) color.Color 
 	if c == nil || c.internalType == nil {
 		return nil
 	}
-	return c.internalType.GetColorAtZoomLevel(zoomLevel)
+	return c.internalType.GetValueAtZoomLevel(zoomLevel)
 }
 
 func (c *ColorType) UnmarshalJSON(data []byte) error {
@@ -44,15 +45,31 @@ func (c *ColorType) UnmarshalJSON(data []byte) error {
 		}
 
 		c.internalType = plainColorType{colorValue}
-		return nil
+	case map[string]interface{}:
+		var colorStops ColorStopsType
+		err = json.Unmarshal(data, &colorStops)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+
+		c.internalType = &colorStops
+		// base := val["base"].(float64)
+		// var colorStops []*colorStop
+
+		// c.internalType = &ColorStopsType{
+		// 	Base: &base,
+		// 	Stops: colorStops
+		// }
+	default:
+		panic(fmt.Sprintf("couldn't understand: %T :: %s", i, string(data)))
 	}
 
-	panic("couldn't understand: " + string(data))
+	return nil
 }
 
 // interface for internal type
 type internalColorType interface {
-	GetColorAtZoomLevel(zoomLevel ownmap.ZoomLevel) color.Color
+	GetValueAtZoomLevel(zoomLevel ownmap.ZoomLevel) color.Color
 }
 
 // implementations of internal types
@@ -60,7 +77,7 @@ type plainColorType struct {
 	Color color.Color
 }
 
-func (p plainColorType) GetColorAtZoomLevel(zoomLevel ownmap.ZoomLevel) color.Color {
+func (p plainColorType) GetValueAtZoomLevel(zoomLevel ownmap.ZoomLevel) color.Color {
 	return p.Color
 }
 

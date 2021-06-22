@@ -7,14 +7,14 @@ import (
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/ownmap"
+	"github.com/jamesrr39/ownmap-app/ownmapdal"
 	"github.com/jamesrr39/ownmap-app/styling"
 )
 
-type ObjectType string
-
 const (
-	ObjectTypeLineString ObjectType = "LineString"
-	ObjectTypePolygon    ObjectType = "Polygon"
+	ObjectTypePoint      = "Point"
+	ObjectTypeLineString = "LineString"
+	ObjectTypePolygon    = "Polygon"
 
 	backgroundLayerID = "background"
 )
@@ -90,6 +90,27 @@ func (s *MapboxGLStyle) GetBackground() color.Color {
 	return s.backgroundColor
 }
 
+func (s *MapboxGLStyle) GetWantedObjects(zoomLevel ownmap.ZoomLevel) []*ownmapdal.TagKeyWithType {
+	var objects []*ownmapdal.TagKeyWithType
+	for _, layer := range s.style.Layers {
+		if layer.ID == backgroundLayerID {
+			continue
+		}
+
+		if layer.MinZoom != nil && *layer.MinZoom > float64(zoomLevel) {
+			continue
+		}
+
+		if layer.MaxZoom != nil && *layer.MaxZoom < float64(zoomLevel) {
+			continue
+		}
+
+		tagKeysToFetch := layer.Filter.GetTagKeysToFetch(layer.SourceLayer)
+		objects = append(objects, tagKeysToFetch...)
+	}
+	return objects
+}
+
 func (s *styleType) calculateBackgroundColor() (color.Color, errorsx.Error) {
 	if len(s.Layers) == 0 {
 		return color.White, nil
@@ -131,7 +152,7 @@ type styleType struct {
 func Parse(reader io.Reader) (*MapboxGLStyle, errorsx.Error) {
 	s := new(styleType)
 	dec := json.NewDecoder(reader)
-	dec.DisallowUnknownFields()
+	// dec.DisallowUnknownFields()
 	err := dec.Decode(s)
 	if err != nil {
 		return nil, errorsx.Wrap(err)
