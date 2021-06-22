@@ -1,5 +1,7 @@
 # ownmap
 
+**Please note, the status of this project is "pre-alpha testing development". This means that interfaces, file formats, APIs can (and will) change on a regular basis without any notice.**
+
 The aim of this project is to be able to provide a 1-file program that can generate "slippy" maps from openstreetmap PBF files. Ideally it should be able to run (at least serving map tiles) on low-end hard, with a Raspberry Pi-level computer being the target (ideally the Raspberry Pi Zero, but that might be a stretch considering how powerful the hardware is).
 
 The project contains:
@@ -17,8 +19,9 @@ Then you should place the downloaded file in `data/sample-pbf-file.pbf`. (Altern
 
 Then run `make run_dev_import`. This will read the pbf file and create a `ownmapdb` file. This contains information from the pbf file, but also sorts the items and contains an index to find things more efficiently given a geographic area.
 
-You can then run `make run_dev_server__basic_style`. This will start a web server. In the logs you can see the address that it is serving on. Open up a web browser and go to that address. You will see ae n interactive slippy map with tiles being served from your tileserver.
+You can then run `make run_dev_server__basic_style`. This will start a web server. In the logs you can see the address that it is serving on. Open up a web browser and go to that address. You will see an interactive slippy map with tiles being served from your tileserver.
 
 ### Profiling
 
 go tool pprof --web ownmap-app /path/to/profile/cpu.pprof > profile_out.html
+
