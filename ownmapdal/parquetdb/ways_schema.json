@@ -1,0 +1,40 @@
+{
+    "Tag": "name=parquet_go_root",
+    "Fields": [
+      {
+        "Tag": "name=id, type=INT64"
+      },
+      {
+        "Tag": "name=tags, type=LIST",
+        "Fields": [
+          {
+            "Tag": "name=element",
+            "Fields": [
+              {
+                "Tag": "name=key, type=BYTE_ARRAY, convertedtype=UTF8"
+              },
+              {
+                "Tag": "name=value, type=BYTE_ARRAY, convertedtype=UTF8"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "Tag": "name=waypoints, type=LIST",
+        "Fields": [
+            {
+              "Tag": "name=element",
+              "Fields": [
+                {
+                  "Tag": "name=lat, type=DOUBLE"
+                },
+                {
+                  "Tag": "name=lon, type=DOUBLE"
+                }
+              ]
+            }
+          ]
+      }
+    ]
+  }
