@@ -1,10 +1,10 @@
 # github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751
-## explicit
 github.com/alecthomas/template
 github.com/alecthomas/template/parse
 # github.com/alecthomas/units v0.0.0-20210208195552-ff826a37aa15
-## explicit
 github.com/alecthomas/units
+# github.com/apache/thrift v0.13.1-0.20201008052519-daf620915714
+github.com/apache/thrift/lib/go/thrift
 # github.com/boltdb/bolt v1.3.1
 ## explicit
 github.com/boltdb/bolt
@@ -39,6 +39,8 @@ github.com/gogo/protobuf/protoc-gen-gogo/descriptor
 github.com/golang/freetype
 github.com/golang/freetype/raster
 github.com/golang/freetype/truetype
+# github.com/golang/snappy v0.0.1
+github.com/golang/snappy
 # github.com/google/uuid v1.2.0
 github.com/google/uuid
 # github.com/jamesrr39/go-snapshot-testing v0.0.0-20210417135521-a5ca70c087bc
@@ -72,6 +74,14 @@ github.com/jamesrr39/semaphore
 ## explicit
 github.com/jmoiron/sqlx
 github.com/jmoiron/sqlx/reflectx
+# github.com/klauspost/compress v1.10.5
+github.com/klauspost/compress/flate
+github.com/klauspost/compress/fse
+github.com/klauspost/compress/gzip
+github.com/klauspost/compress/huff0
+github.com/klauspost/compress/snappy
+github.com/klauspost/compress/zstd
+github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/lib/pq v1.10.0
 ## explicit
 github.com/lib/pq
@@ -104,10 +114,26 @@ github.com/pmezard/go-difflib/difflib
 ## explicit
 github.com/spf13/afero
 github.com/spf13/afero/mem
-# github.com/stretchr/testify v1.4.0
+# github.com/stretchr/testify v1.5.1
 ## explicit
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
+# github.com/xitongsys/parquet-go v1.6.0
+## explicit
+github.com/xitongsys/parquet-go/common
+github.com/xitongsys/parquet-go/compress
+github.com/xitongsys/parquet-go/encoding
+github.com/xitongsys/parquet-go/layout
+github.com/xitongsys/parquet-go/marshal
+github.com/xitongsys/parquet-go/parquet
+github.com/xitongsys/parquet-go/schema
+github.com/xitongsys/parquet-go/source
+github.com/xitongsys/parquet-go/types
+github.com/xitongsys/parquet-go/writer
+# github.com/xitongsys/parquet-go-source v0.0.0-20201108113611-f372b7d813be
+## explicit
+github.com/xitongsys/parquet-go-source/local
+github.com/xitongsys/parquet-go-source/writerfile
 # golang.org/x/exp/errors v0.0.0-20201008143054-e3b2a7f2fdc7
 ## explicit
 golang.org/x/exp/errors
@@ -127,8 +153,6 @@ golang.org/x/sys/unix
 ## explicit
 golang.org/x/text/transform
 golang.org/x/text/unicode/norm
-# google.golang.org/protobuf v1.26.0
-## explicit
 # gopkg.in/alecthomas/kingpin.v2 v2.2.6
 ## explicit
 gopkg.in/alecthomas/kingpin.v2

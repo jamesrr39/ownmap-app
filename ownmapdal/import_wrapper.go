@@ -70,7 +70,7 @@ func createRescanRunFunc(
 			for _, n := range obj.Nodes {
 				node, err := importer.GetNodeByID(int64(n.ID))
 				if err != nil {
-					if errorsx.Cause(err) == errorsx.ObjectNotFound {
+					if errorsx.Cause(err) != errorsx.ObjectNotFound {
 						return errorsx.Wrap(err)
 					}
 

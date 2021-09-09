@@ -21,6 +21,12 @@ Then run `make run_dev_import`. This will read the pbf file and create a `ownmap
 
 You can then run `make run_dev_server__basic_style`. This will start a web server. In the logs you can see the address that it is serving on. Open up a web browser and go to that address. You will see an interactive slippy map with tiles being served from your tileserver.
 
+### parquet
+
+```
+select unnest(tags)['key'] from '*.parquet' where tags is not null limit 10;
+```
+
 ### Profiling
 
 go tool pprof --web ownmap-app /path/to/profile/cpu.pprof > profile_out.html

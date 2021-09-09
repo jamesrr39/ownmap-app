@@ -53,6 +53,7 @@ type DBFileType string
 const (
 	DBFileTypeMapmakerDB DBFileType = "ownmapdb"
 	DBFileTypePostgresql DBFileType = "postgresql"
+	DBFileTypeParquet    DBFileType = "parquet"
 )
 
 type DBFileConnectionURL struct {

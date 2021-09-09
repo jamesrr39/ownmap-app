@@ -26,6 +26,7 @@ import (
 	"github.com/jamesrr39/ownmap-app/ownmapdal"
 	"github.com/jamesrr39/ownmap-app/ownmapdal/ownmapdb"
 	"github.com/jamesrr39/ownmap-app/ownmapdal/ownmapsqldb/ownmappostgresql"
+	"github.com/jamesrr39/ownmap-app/ownmapdal/parquetdb"
 	"github.com/jamesrr39/ownmap-app/ownmaprenderer"
 	"github.com/jamesrr39/ownmap-app/styling"
 	"github.com/jamesrr39/ownmap-app/styling/mapboxglstyle"
@@ -437,6 +438,13 @@ func setupImport() {
 			if err != nil {
 				return errorsx.Wrap(err)
 			}
+
+		case ownmapdal.DBFileTypeParquet:
+			importer, err = parquetdb.NewImporter(dbConnConfig.ConnectionPath, pbfHeader)
+			if err != nil {
+				return errorsx.Wrap(err)
+			}
+
 		default:
 			return errorsx.Errorf("unknown DB file type: %q\n", dbConnConfig.Type)
 		}
@@ -446,7 +454,7 @@ func setupImport() {
 			return errorsx.Wrap(err)
 		}
 
-		logger.Info("import finished in %s", time.Now().Sub(startTime))
+		logger.Info("import finished in %s", time.Since(startTime))
 
 		finishedChan <- true
 

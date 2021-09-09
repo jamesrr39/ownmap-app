@@ -3,8 +3,6 @@ module github.com/jamesrr39/ownmap-app
 go 1.16
 
 require (
-	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
-	github.com/alecthomas/units v0.0.0-20210208195552-ff826a37aa15 // indirect
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-chi/render v1.0.1
@@ -21,11 +19,12 @@ require (
 	github.com/paulmach/osm v0.2.0
 	github.com/pkg/profile v1.5.0
 	github.com/spf13/afero v1.6.0 // indirect
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.5.1
+	github.com/xitongsys/parquet-go v1.6.0
+	github.com/xitongsys/parquet-go-source v0.0.0-20201108113611-f372b7d813be
 	golang.org/x/exp/errors v0.0.0-20201008143054-e3b2a7f2fdc7
 	golang.org/x/image v0.0.0-20210220032944-ac19c3e999fb // indirect
 	golang.org/x/sys v0.0.0-20210415045647-66c3f260301c // indirect
 	golang.org/x/text v0.3.6 // indirect
-	google.golang.org/protobuf v1.26.0 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 )

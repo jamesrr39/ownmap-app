@@ -79,6 +79,19 @@ run_dev_import:
 		--profile \
 		--keep-work-dir
 
+run_dev_import_parquet:
+	mkdir -p ${DEV_IMPORT_TMP_DIR}
+	mkdir -p data/data_files/parquet_files
+	go build -o ${DEV_IMPORT_TMP_DIR}/ownmap-app cmd/ownmap-app-main.go
+	${DEV_IMPORT_TMP_DIR}/ownmap-app \
+		import \
+		parquet://data/data_files/parquet_files \
+		data/sample-pbf-file.pbf \
+		--tmp-dir ${DEV_IMPORT_TMP_DIR} \
+		--profile \
+		--keep-work-dir
+
+
 .PHONY: run_dev_import_postgres
 run_dev_import_postgres:
 	# docker exec -it ownmapapp_postgresql_1 psql -U docker -c 'DROP DATABASE IF EXISTS ownmap; CREATE DATABASE ownmap;'
