@@ -21,7 +21,7 @@
             ]
         },
         {
-            "Tag": "name=relationMember, type=LIST",
+            "Tag": "name=members, type=LIST",
             "Fields": [
                 {
                     "Tag": "name=element",

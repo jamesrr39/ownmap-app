@@ -3,10 +3,12 @@ package parquetdb
 import (
 	_ "embed"
 	"encoding/json"
-	"fmt"
+	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/ownmap"
 	"github.com/jamesrr39/ownmap-app/ownmapdal"
@@ -19,6 +21,21 @@ import (
 
 // JSON writer example: https://github.com/xitongsys/parquet-go/blob/62cf52a8dad4f8b729e6c38809f091cd134c3749/example/json_write.go
 
+type parquetFileType struct {
+	Name   string
+	Schema string
+}
+
+func getFileNamesAndSchemas() []parquetFileType {
+	return []parquetFileType{
+		{Name: "nodes.parquet", Schema: nodesSchema},
+		{Name: "ways.parquet", Schema: waysSchema},
+		{Name: "relations.parquet", Schema: relationsSchema},
+	}
+}
+
+const datasetInfoFileName = "dataset_info.pb"
+
 var (
 	//go:embed nodes_schema.json
 	nodesSchema string
@@ -29,27 +46,26 @@ var (
 )
 
 type Importer struct {
+	dirPath                    string
 	nodesParquetWriterFile     *parquetwriter.JSONWriter
 	waysParquetWriterFile      *parquetwriter.JSONWriter
 	relationsParquetWriterFile *parquetwriter.JSONWriter
 	nodeMap                    map[int64]*ownmap.OSMNode
 	wayMap                     map[int64]*ownmap.OSMWay
 	relationMap                map[int64]*ownmap.OSMRelation
+	ImportBounds               ownmap.DatasetInfo_Bounds
+	ReplicationTime            time.Time
 }
 
 func NewImporter(dirPath string, pbfHeader *osmpbf.Header) (*Importer, errorsx.Error) {
-
-	schemes := []string{nodesSchema, waysSchema, relationsSchema}
-	fileNames := []string{"nodes", "ways", "relations"}
-
 	var writerFiles []*parquetwriter.JSONWriter
-	for i := 0; i < 3; i++ {
-		f, err := local.NewLocalFileWriter(filepath.Join(dirPath, fmt.Sprintf("%s.parquet", fileNames[i])))
+	for _, fileNameAndSchema := range getFileNamesAndSchemas() {
+		f, err := local.NewLocalFileWriter(filepath.Join(dirPath, fileNameAndSchema.Name))
 		if err != nil {
 			return nil, errorsx.Wrap(err)
 		}
 
-		writerFile, err := parquetwriter.NewJSONWriter(schemes[i], f, int64(runtime.NumCPU()))
+		writerFile, err := parquetwriter.NewJSONWriter(fileNameAndSchema.Schema, f, int64(runtime.NumCPU()))
 		if err != nil {
 			return nil, errorsx.Wrap(err)
 		}
@@ -59,8 +75,10 @@ func NewImporter(dirPath string, pbfHeader *osmpbf.Header) (*Importer, errorsx.E
 	}
 
 	return &Importer{
+		dirPath,
 		writerFiles[0], writerFiles[1], writerFiles[2],
 		make(map[int64]*ownmap.OSMNode), make(map[int64]*ownmap.OSMWay), make(map[int64]*ownmap.OSMRelation),
+		*ownmap.OSMBoundsToDatasetInfoBounds(*pbfHeader.Bounds), pbfHeader.ReplicationTimestamp,
 	}, nil
 }
 
@@ -146,8 +164,24 @@ func (i *Importer) Commit() (ownmapdal.DataSourceConn, errorsx.Error) {
 	if err != nil {
 		return nil, errorsx.Wrap(err)
 	}
-	panic("done!!")
+
+	datasetInfo := &ownmap.DatasetInfo{
+		Bounds:            &i.ImportBounds,
+		ReplicationTimeMs: uint64(i.ReplicationTime.UnixNano() / (1000 * 1000)),
+	}
+
+	datasetInfoBytes, err := proto.Marshal(datasetInfo)
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+
+	err = os.WriteFile(filepath.Join(i.dirPath, datasetInfoFileName), datasetInfoBytes, 0644)
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+
+	return NewParquetDatasource(i.dirPath)
 }
 func (i *Importer) Rollback() errorsx.Error {
-	return nil // TODO?
+	panic("unhandled: Rollback")
 }

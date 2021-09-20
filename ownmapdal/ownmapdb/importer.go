@@ -399,12 +399,8 @@ func (importer *Importer) Commit() (ownmapdal.DataSourceConn, errorsx.Error) {
 	}
 
 	datasetInfo := &ownmap.DatasetInfo{
-		Bounds: &ownmap.DatasetInfo_Bounds{
-			MaxLat: importer.pbfHeader.Bounds.MaxLat,
-			MaxLon: importer.pbfHeader.Bounds.MaxLon,
-			MinLat: importer.pbfHeader.Bounds.MinLat,
-			MinLon: importer.pbfHeader.Bounds.MinLon,
-		},
+		Bounds:            ownmap.OSMBoundsToDatasetInfoBounds(*importer.pbfHeader.Bounds),
+		ReplicationTimeMs: uint64(importer.pbfHeader.ReplicationTimestamp.UnixNano() / (1000 * 1000)),
 	}
 
 	// save data to files
