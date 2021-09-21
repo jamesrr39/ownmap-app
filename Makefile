@@ -48,6 +48,11 @@ run_dev_server__mapboxgl_styles:
 run_dev_server__basic_style:
 	CGO_ENABLED=0 go run cmd/ownmap-app-main.go serve ownmapdb://data/data_files/sample_database.db
 
+.PHONY: run_dev_server__mapboxgl_styles_parquet
+run_dev_server__mapboxgl_styles_parquet:
+	CGO_ENABLED=0 go run cmd/ownmap-app-main.go serve parquet://data/data_files/parquet_files --default-style-id="basic" --extra-styles=data/styles/gl-style,data/styles/gl-style2
+
+
 # DEV_DOCKER_IMAGE=jamesrr39/run_dev_import_docker
 # MAX_MEMORY=8g
 

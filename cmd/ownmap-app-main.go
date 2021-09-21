@@ -582,6 +582,8 @@ func loadDBConn(dbConfigString string, ownmapDBFileHandlerLimit uint) (ownmapdal
 		return ownmapdb.NewMapmakerDBConn(openFileFunc, filepath.Base(dbConfigString), ownmapDBFileHandlerLimit)
 	case ownmapdal.DBFileTypePostgresql:
 		return ownmappostgresql.NewDBConn(dbConnConfig.ConnectionPath)
+	case ownmapdal.DBFileTypeParquet:
+		return parquetdb.NewParquetDatasource(dbConnConfig.ConnectionPath)
 	default:
 		return nil, errorsx.Errorf("unrecognized db connection type: %q", dbConnConfig.Type)
 	}

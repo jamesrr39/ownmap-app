@@ -23,8 +23,14 @@ You can then run `make run_dev_server__basic_style`. This will start a web serve
 
 ### parquet
 
+DuckDB is a great tool to debug your parquet files with.
+
+Install it, and then change directory in the terminal to the directory where you have the parquet files. Then run `duckdb` and try out these example queries:
+
 ```
 select unnest(tags)['key'] from '*.parquet' where tags is not null limit 10;
+
+select unnest(tags)['key'], unnest(tags)['value'], id, lat, lon from 'nodes.parquet' where lat > 12.34 limit 100;
 ```
 
 ### Profiling

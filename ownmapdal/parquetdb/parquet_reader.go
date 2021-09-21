@@ -75,9 +75,10 @@ func (ds *ParquetDatasource) DatasetInfo() (*ownmap.DatasetInfo, errorsx.Error) 
 	return ds.datasetInfo, nil
 }
 func (ds *ParquetDatasource) GetInBounds(ctx context.Context, bounds osm.Bounds, filter *ownmapdal.GetInBoundsFilter) (ownmapdal.TagNodeMap, ownmapdal.TagWayMap, ownmapdal.TagRelationMap, errorsx.Error) {
-	numRows := ds.nodesParquetReaderFile.GetNumRows()
+	// numRows := ds.nodesParquetReaderFile.GetNumRows()
+	numRows := int64(10)
 
-	classes, rls, dls, err := ds.nodesParquetReaderFile.ReadColumnByPath("parquet_go_root.class.tags.element", numRows)
+	classes, rls, dls, err := ds.nodesParquetReaderFile.ReadColumnByPath("parquet_go_root.tags", numRows)
 	if err != nil {
 		return nil, nil, nil, errorsx.Wrap(err)
 	}
