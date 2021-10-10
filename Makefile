@@ -18,10 +18,6 @@ generate-protobufs:
 	protoc --gogoslick_out=. -I thirdparty/github.com/google/protobuf/src -I . --gogoslick_opt=paths=source_relative ownmapdal/ownmapdb/ownmapdb.proto
 	protoc --gogoslick_out=. -I thirdparty/github.com/google/protobuf/src -I . --gogoslick_opt=paths=source_relative ownmapdal/ownmapdb/diskfilemap/disk_file_map_types.proto
 
-.PHONY: generate-static
-generate-static:
-	go run vendor/github.com/rakyll/statik/statik.go -src static_assets -dest staticassetsbundle
-
 .PHONY: test
 test:
 	go test ./...
@@ -94,7 +90,8 @@ run_dev_import_parquet:
 		data/sample-pbf-file.pbf \
 		--tmp-dir ${DEV_IMPORT_TMP_DIR} \
 		--profile \
-		--keep-work-dir
+		--keep-work-dir \
+		--parquet-row-group-size 1048576
 
 
 .PHONY: run_dev_import_postgres

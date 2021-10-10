@@ -31,6 +31,8 @@ Install it, and then change directory in the terminal to the directory where you
 select unnest(tags)['key'] from '*.parquet' where tags is not null limit 10;
 
 select unnest(tags)['key'], unnest(tags)['value'], id, lat, lon from 'nodes.parquet' where lat > 12.34 limit 100;
+
+explain analyze select id, unnest(tags)['key'] from 'nodes.parquet' where tags is not null and lat > 12.34 limit 10;
 ```
 
 ### Profiling

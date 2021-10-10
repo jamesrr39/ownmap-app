@@ -37,7 +37,10 @@ import (
 	"github.com/pkg/profile"
 )
 
-const MAX_SERVER_RUNNING_ATTEMPTS = 50
+const (
+	MAX_SERVER_RUNNING_ATTEMPTS    = 50
+	DEFAULT_PARQUET_ROW_GROUP_SIZE = 128 * 1024 * 1024 * 4 //128M * 4
+)
 
 var logger *logpkg.Logger
 
@@ -358,6 +361,7 @@ func setupImport() {
 	keepWorkDirFlag := cmd.Flag("keep-work-dir", "keep the working directory used during the import (for debugging)").Bool()
 	ownmapDBFileHandlerLimit := cmd.Flag("ownmapdb-file-handler-limit", "maximum amount of file handlers per ownmap DB").Default(fmt.Sprintf("%d", DEFAULT_MAPMAKER_DB_FILE_HANDLER_LIMIT)).Uint()
 	shouldProfile := cmd.Flag("profile", "profile the import performance").Bool()
+	parquetRowGroupSize := cmd.Flag("parquet-row-group-size", `(applies only to imports in the parquet format) Amount of rows in one parquet "group"`).Default(fmt.Sprintf("%d", DEFAULT_PARQUET_ROW_GROUP_SIZE)).Int64()
 	cmd.Action(func(ctx *kingpin.ParseContext) (err error) {
 		defer func() {
 			errorx, ok := err.(errorsx.Error)
@@ -440,7 +444,7 @@ func setupImport() {
 			}
 
 		case ownmapdal.DBFileTypeParquet:
-			importer, err = parquetdb.NewImporter(dbConnConfig.ConnectionPath, pbfHeader)
+			importer, err = parquetdb.NewImporter(dbConnConfig.ConnectionPath, pbfHeader, *parquetRowGroupSize)
 			if err != nil {
 				return errorsx.Wrap(err)
 			}
