@@ -1,14 +1,15 @@
 package fonts
 
 import (
-	"bytes"
-	"encoding/base64"
-	"io/ioutil"
+	_ "embed"
 
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
 	"github.com/jamesrr39/goutil/errorsx"
 )
+
+//go:embed Roboto-Regular.ttf
+var robotoFontBytes []byte
 
 var robotoFont *truetype.Font
 
@@ -22,13 +23,7 @@ func init() {
 }
 
 func loadRoboto() (*truetype.Font, errorsx.Error) {
-
-	base64Reader := base64.NewDecoder(base64.StdEncoding, bytes.NewBuffer([]byte(robotoRegularBase64)))
-	fontBytes, err := ioutil.ReadAll(base64Reader)
-	if err != nil {
-		return nil, errorsx.Wrap(err)
-	}
-	font, err := freetype.ParseFont(fontBytes)
+	font, err := freetype.ParseFont(robotoFontBytes)
 	if err != nil {
 		return nil, errorsx.Wrap(err)
 	}
