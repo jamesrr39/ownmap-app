@@ -57,7 +57,7 @@ type Importer struct {
 	ReplicationTime            time.Time
 }
 
-func NewImporter(dirPath string, pbfHeader *osmpbf.Header) (*Importer, errorsx.Error) {
+func NewImporter(dirPath string, pbfHeader *osmpbf.Header, rowGroupSize int64) (*Importer, errorsx.Error) {
 	var writerFiles []*parquetwriter.JSONWriter
 	for _, fileNameAndSchema := range getFileNamesAndSchemas() {
 		f, err := local.NewLocalFileWriter(filepath.Join(dirPath, fileNameAndSchema.Name))
@@ -69,7 +69,7 @@ func NewImporter(dirPath string, pbfHeader *osmpbf.Header) (*Importer, errorsx.E
 		if err != nil {
 			return nil, errorsx.Wrap(err)
 		}
-		writerFile.RowGroupSize = 128 * 1024 * 1024 * 4 //128M * 4
+		writerFile.RowGroupSize = rowGroupSize
 		writerFile.CompressionType = parquet.CompressionCodec_SNAPPY
 		writerFiles = append(writerFiles, writerFile)
 	}
