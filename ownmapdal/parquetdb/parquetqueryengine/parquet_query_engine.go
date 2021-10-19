@@ -25,6 +25,15 @@ type rowMap struct {
 
 type ResultRow []interface{}
 
+func (r *ResultRow) GoString() string {
+	var fragments []string
+	for _, item := range *r {
+		fragments = append(fragments, fmt.Sprintf("%#v", item))
+	}
+
+	return fmt.Sprintf("{%s}", strings.Join(fragments, ", "))
+}
+
 func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName string) ([]*ResultRow, errorsx.Error) {
 	fieldNamesWantedForWhereClause := make(map[string]struct{})
 	comparativeFilters := q.Where.GetComparativeFilters()

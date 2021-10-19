@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"runtime"
+	"sort"
 	"testing"
 
 	"github.com/jamesrr39/goutil/errorsx"
@@ -38,12 +39,12 @@ func Test_Run(t *testing.T) {
 				&ComparativeFilter{
 					FieldName: "Id",
 					Operator:  ComparativeOperatorLessThan,
-					Operand:   Int64Operand(3),
+					Operand:   Int64Operand(5),
 				},
 				// &ComparativeFilter{
 				// 	FieldName: "Lat",
 				// 	Operator:  ComparativeOperatorLessThan,
-				// 	Operand:   Float64Operand(12),
+				// 	Operand:   Float64Operand(-10.1),
 				// },
 			},
 		},
@@ -52,10 +53,22 @@ func Test_Run(t *testing.T) {
 	expectedResults := []*ResultRow{
 		{int64(1), float64(10), float64(-10)},
 		{int64(2), float64(10.1), float64(-10.1)},
+		{int64(3), float64(10.2), float64(-10.2)},
+		{int64(4), float64(10.3), float64(-10.3)},
 	}
 
 	results, runErr := query.Run(parquetReader, "Parquet_go_root")
 	require.NoError(t, runErr)
+
+	// sort results for deterministic result set
+	sort.Slice(results, func(i, j int) bool {
+		// [0] field is Id field
+		iResult := *results[i]
+		jResult := *results[j]
+
+		return iResult[0].(int64) < jResult[0].(int64)
+
+	})
 	assert.Equal(t, expectedResults, results)
 }
 
