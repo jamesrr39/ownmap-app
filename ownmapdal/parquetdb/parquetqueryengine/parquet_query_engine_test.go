@@ -41,18 +41,18 @@ func Test_Run(t *testing.T) {
 					Operator:  ComparativeOperatorLessThan,
 					Operand:   Int64Operand(5),
 				},
-				// &ComparativeFilter{
-				// 	FieldName: "Lat",
-				// 	Operator:  ComparativeOperatorLessThan,
-				// 	Operand:   Float64Operand(-10.1),
-				// },
+				&ComparativeFilter{
+					FieldName: "Lon",
+					Operator:  ComparativeOperatorLessThan,
+					Operand:   Float64Operand(-10.1),
+				},
 			},
 		},
 	}
 
 	expectedResults := []*ResultRow{
-		{int64(1), float64(10), float64(-10)},
-		{int64(2), float64(10.1), float64(-10.1)},
+		// {int64(1), float64(10), float64(-10)},
+		// {int64(2), float64(10.1), float64(-10.1)},
 		{int64(3), float64(10.2), float64(-10.2)},
 		{int64(4), float64(10.3), float64(-10.3)},
 	}
@@ -62,10 +62,10 @@ func Test_Run(t *testing.T) {
 
 	// sort results for deterministic result set
 	sort.Slice(results, func(i, j int) bool {
-		// [0] field is Id field
 		iResult := *results[i]
 		jResult := *results[j]
 
+		// [0] field is Id field
 		return iResult[0].(int64) < jResult[0].(int64)
 
 	})

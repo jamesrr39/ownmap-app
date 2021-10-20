@@ -32,8 +32,7 @@ func (csr ColumnScanResult) String() string {
 type Filter interface {
 	ShouldColumnBeScanned(columnMetadata *parquet.ColumnMetaData) (ColumnScanResult, errorsx.Error)
 	GetComparativeFilters() []*ComparativeFilter
-	ShouldFilterItemIn(fieldName string, value Operand) (bool, errorsx.Error)
-	// ShouldRowGroupBeScanned(rowGroup *parquet.RowGroup) (bool, error)
+	ShouldFilterItemIn(fieldName string, value Operand) (ColumnScanResult, errorsx.Error)
 }
 
 type LogicalFilterOperator string
@@ -46,29 +45,6 @@ type LogicalFilter struct {
 	Operator     LogicalFilterOperator
 	ChildFilters []Filter
 }
-
-// func (lf *LogicalFilter) ShouldRowGroupBeScanned(rowGroup *parquet.RowGroup) (bool, error) {
-// 	switch lf.Operator {
-// 	case LogicalFilterOperatorAnd:
-// 		if len(lf.ChildFilters) == 0 {
-// 			return false, errors.New("no child filters supplied")
-// 		}
-
-// 		for i, childFilter := range lf.ChildFilters {
-// 			childFilterFilteredIn, err := childFilter.ShouldRowGroupBeScanned(rowGroup)
-// 			if err != nil {
-// 				return false, err
-// 			}
-// 			if !childFilterFilteredIn {
-// 				log.Printf("i: %d, f: %#v\n", i, childFilter)
-// 				return false, nil
-// 			}
-// 		}
-// 		return true, nil
-// 	default:
-// 		return false, fmt.Errorf("unrecognised operator: %q", lf.Operator)
-// 	}
-// }
 
 func (lf *LogicalFilter) ShouldColumnBeScanned(columnMetadata *parquet.ColumnMetaData) (ColumnScanResult, errorsx.Error) {
 	switch lf.Operator {
@@ -83,6 +59,8 @@ func (lf *LogicalFilter) ShouldColumnBeScanned(columnMetadata *parquet.ColumnMet
 			if err != nil {
 				return 0, errorsx.Wrap(err)
 			}
+
+			log.Printf("col: %q, cfsr: %s (cf: %#v)\n", strings.Join(columnMetadata.PathInSchema, "."), childFilterScanResult, childFilter)
 
 			switch childFilterScanResult {
 			case ColumnScanResultNo:
@@ -110,25 +88,35 @@ func (lf *LogicalFilter) GetComparativeFilters() []*ComparativeFilter {
 	return filters
 }
 
-func (lf *LogicalFilter) ShouldFilterItemIn(fieldName string, value Operand) (bool, errorsx.Error) {
+func (lf *LogicalFilter) ShouldFilterItemIn(fieldName string, value Operand) (ColumnScanResult, errorsx.Error) {
 	switch lf.Operator {
 	case LogicalFilterOperatorAnd:
 		if len(lf.ChildFilters) == 0 {
-			return false, errorsx.Errorf("no child filters supplied")
+			return 0, errorsx.Errorf("no child filters supplied")
 		}
 
+		var shouldScanColumn ColumnScanResult = ColumnScanResultNotSure
+
 		for _, childFilter := range lf.ChildFilters {
-			shouldFilterIn, err := childFilter.ShouldFilterItemIn(fieldName, value)
+			shouldFilterResult, err := childFilter.ShouldFilterItemIn(fieldName, value)
 			if err != nil {
-				return false, err
+				return 0, err
 			}
-			if !shouldFilterIn {
-				return false, nil
+			switch shouldFilterResult {
+			case ColumnScanResultNo:
+				return ColumnScanResultNo, nil
+			case ColumnScanResultYes:
+				// mark column as wanted, but don't exit yet (wait to see the result of the other child filters)
+				shouldScanColumn = ColumnScanResultYes
+			case ColumnScanResultNotSure:
+				// no effect on this
+			default:
+				return 0, errorsx.Errorf("unknown filter scan result: %v", shouldFilterResult)
 			}
 		}
-		return true, nil
+		return shouldScanColumn, nil
 	default:
-		return false, errorsx.Errorf("unrecognised operator: %q", lf.Operator)
+		return 0, errorsx.Errorf("unrecognised operator: %q", lf.Operator)
 	}
 }
 
@@ -145,41 +133,9 @@ type ComparativeFilter struct {
 	Operand   Operand
 }
 
-// func (cf *ComparativeFilter) ShouldRowGroupBeScanned(columnMetadata *parquet.RowGroup) (bool, error) {
-// 	if cf.FieldName != strings.Join(columnMetadata.PathInSchema, ".") {
-// 		return false, nil
-// 	}
-
-// 	switch cf.Operator {
-// 	case ComparativeOperatorLessThan:
-// 		if cf.Operand == nil {
-// 			return false, errors.New("operand is nil")
-// 		}
-
-// 		colMaxVal, err := bytesToOperand(columnMetadata.Statistics.MaxValue, columnMetadata.Type)
-// 		if err != nil {
-// 			return false, errorsx.Wrap(err)
-// 		}
-
-// 		return cf.Operand.IsLessThan(colMaxVal)
-// 	case ComparativeOperatorGreaterThan:
-// 		if cf.Operand == nil {
-// 			return false, errors.New("operand is nil")
-// 		}
-
-// 		colMinVal, err := bytesToOperand(columnMetadata.Statistics.MinValue, columnMetadata.Type)
-// 		if err != nil {
-// 			return false, errorsx.Wrap(err)
-// 		}
-// 		return cf.Operand.IsGreaterThan(colMinVal)
-// 	}
-
-// 	return false, fmt.Errorf("unrecognised operator: %q", cf.Operator)
-// }
-
 func (cf *ComparativeFilter) ShouldColumnBeScanned(columnMetadata *parquet.ColumnMetaData) (ColumnScanResult, errorsx.Error) {
 	if cf.FieldName != strings.Join(columnMetadata.PathInSchema, ".") {
-		return ColumnScanResultNo, nil
+		return ColumnScanResultNotSure, nil
 	}
 
 	switch cf.Operator {
@@ -228,26 +184,40 @@ func (cf *ComparativeFilter) ShouldColumnBeScanned(columnMetadata *parquet.Colum
 	return ColumnScanResultNo, errorsx.Errorf("unrecognised operator: %q", cf.Operator)
 }
 
-func (cf *ComparativeFilter) ShouldFilterItemIn(fieldName string, value Operand) (bool, errorsx.Error) {
+func (cf *ComparativeFilter) ShouldFilterItemIn(fieldName string, value Operand) (ColumnScanResult, errorsx.Error) {
 	if fieldName != cf.FieldName {
-		return false, nil
+		return ColumnScanResultNotSure, nil
 	}
 
 	switch cf.Operator {
 	case ComparativeOperatorLessThan:
 		if cf.Operand == nil {
-			return false, errorsx.Errorf("operand is nil")
+			return 0, errorsx.Errorf("operand is nil")
 		}
 
-		return value.IsLessThan(cf.Operand)
+		isLess, err := value.IsLessThan(cf.Operand)
+		if err != nil {
+			return 0, errorsx.Wrap(err)
+		}
+		if isLess {
+			return ColumnScanResultYes, nil
+		}
+		return ColumnScanResultNo, nil
 	case ComparativeOperatorGreaterThan:
 		if cf.Operand == nil {
-			return false, errorsx.Errorf("operand is nil")
+			return 0, errorsx.Errorf("operand is nil")
 		}
 
-		return value.IsGreaterThan(cf.Operand)
+		isGreater, err := value.IsGreaterThan(cf.Operand)
+		if err != nil {
+			return 0, errorsx.Wrap(err)
+		}
+		if isGreater {
+			return ColumnScanResultYes, nil
+		}
+		return ColumnScanResultNo, nil
 	default:
-		return false, errorsx.Errorf("unsupported operator: %q", cf.Operator)
+		return 0, errorsx.Errorf("unsupported operator: %q", cf.Operator)
 	}
 }
 

@@ -84,7 +84,7 @@ func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName s
 				case ColumnScanResultYes:
 					// read this column!
 				case ColumnScanResultNo, ColumnScanResultNotSure:
-					log.Printf("skipping scanning column %q; where clause conditions not met", fieldName)
+					log.Printf("not scanning column %q; where clause conditions not met", fieldName)
 					continue
 				default:
 					return nil, errorsx.Errorf("unknown ColumnScanResult: %q", shouldScanForWhereClause)
@@ -104,30 +104,41 @@ func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName s
 			for i, value := range values {
 				switch val := value.(type) {
 				case float64:
-					shouldFilterIn, err := q.Where.ShouldFilterItemIn(getFullParquetFieldPath(column, ""), Float64Operand(val))
+					shouldFilterInResult, err := q.Where.ShouldFilterItemIn(getFullParquetFieldPath(column, ""), Float64Operand(val))
 					if err != nil {
 						return nil, errorsx.Wrap(err)
 					}
 
-					if !shouldFilterIn {
+					switch shouldFilterInResult {
+					case ColumnScanResultYes:
+						// continue with adding this to row IDs to fetch map
+					case ColumnScanResultNo:
 						continue
+					default:
+						return nil, errorsx.Errorf("unexpected ColumnScanResult: %d", shouldFilterInResult)
 					}
 
 					item, ok := rowIDsToFetchInRowGroup[i]
 					if !ok {
-						item = &rowMap{}
+						item = &rowMap{
+							values: make(map[fieldNameType]interface{}),
+						}
 						rowIDsToFetchInRowGroup[i] = item
 					}
 
 					item.values[fieldNameType(fieldName)] = val
 				case int64:
-					shouldFilterIn, err := q.Where.ShouldFilterItemIn(getFullParquetFieldPath(column, ""), Int64Operand(val))
+					shouldFilterInResult, err := q.Where.ShouldFilterItemIn(getFullParquetFieldPath(column, ""), Int64Operand(val))
 					if err != nil {
 						return nil, errorsx.Wrap(err)
 					}
-
-					if !shouldFilterIn {
+					switch shouldFilterInResult {
+					case ColumnScanResultYes:
+						// continue with adding this to row IDs to fetch map
+					case ColumnScanResultNo:
 						continue
+					default:
+						return nil, errorsx.Errorf("unexpected ColumnScanResult: %d", shouldFilterInResult)
 					}
 
 					item, ok := rowIDsToFetchInRowGroup[i]
@@ -148,6 +159,8 @@ func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName s
 			}
 		}
 
+		log.Printf("wanted: %#v\n", rowIDsToFetchInRowGroup)
+
 		if len(rowIDsToFetchInRowGroup) == 0 {
 			// nothing to fetch here
 			continue
@@ -163,7 +176,7 @@ func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName s
 					// value has already been fetched, no need to refetch it
 					continue
 				}
-				fmt.Printf("row ID in row group: %d :: values: %#v\n", rowID, item.values)
+				fmt.Printf("row ID in row group: %d :: field name: %q:: values: %#v\n", rowID, wantedFieldName, item.values)
 				valuesToFetchMap[fieldNameType(wantedFieldName)] = append(valuesToFetchMap[fieldNameType(wantedFieldName)], rowID)
 			}
 		}
@@ -177,6 +190,7 @@ func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName s
 			resultRow := ResultRow{}
 
 			for _, selectField := range q.Select {
+				log.Printf("values:: %#v\n", item.values)
 				value, ok := item.values[fieldNameType(selectField)]
 				if !ok {
 					panic("implementation error: field not fetched: " + selectField)
@@ -209,7 +223,7 @@ func fetchOtherValues(
 			continue
 		}
 		fullFieldName := getFullParquetFieldPath(column, rootSchemaElementName)
-		// TODO read only wanted fields
+		// TODO read only wanted partions of columns
 		values, repetionLevels, definitionLevels, err := parquetReader.ReadColumnByPath(fullFieldName, column.MetaData.NumValues)
 		if err != nil {
 			return errorsx.Wrap(err)
