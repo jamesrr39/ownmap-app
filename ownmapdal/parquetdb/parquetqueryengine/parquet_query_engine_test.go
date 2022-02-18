@@ -58,7 +58,7 @@ func Test_Run(t *testing.T) {
 	}
 
 	results, runErr := query.Run(parquetReader, "Parquet_go_root")
-	require.NoError(t, runErr)
+	require.NoError(t, runErr, string(runErr.Stack()))
 
 	// sort results for deterministic result set
 	sort.Slice(results, func(i, j int) bool {

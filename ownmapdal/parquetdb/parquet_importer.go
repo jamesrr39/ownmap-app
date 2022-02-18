@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/ownmap"
 	"github.com/jamesrr39/ownmap-app/ownmapdal"
@@ -170,12 +169,12 @@ func (i *Importer) Commit() (ownmapdal.DataSourceConn, errorsx.Error) {
 		ReplicationTimeMs: uint64(i.ReplicationTime.UnixNano() / (1000 * 1000)),
 	}
 
-	datasetInfoBytes, err := proto.Marshal(datasetInfo)
+	datasetInfoFile, err := os.Create(filepath.Join(i.dirPath, datasetInfoFileName))
 	if err != nil {
 		return nil, errorsx.Wrap(err)
 	}
 
-	err = os.WriteFile(filepath.Join(i.dirPath, datasetInfoFileName), datasetInfoBytes, 0644)
+	err = json.NewEncoder(datasetInfoFile).Encode(datasetInfo)
 	if err != nil {
 		return nil, errorsx.Wrap(err)
 	}

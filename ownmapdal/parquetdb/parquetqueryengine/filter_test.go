@@ -22,7 +22,7 @@ func TestLogicalFilter_ShouldColumnBeScanned(t *testing.T) {
 		name   string
 		fields fields
 		args   args
-		want   ColumnScanResult
+		want   ShouldScanResult
 		want1  errorsx.Error
 	}{
 		{
@@ -52,7 +52,7 @@ func TestLogicalFilter_ShouldColumnBeScanned(t *testing.T) {
 					Type: parquet.Type_INT64,
 				},
 			},
-			want: ColumnScanResultYes,
+			want: ShouldScanResultYes,
 		},
 	}
 	for _, tt := range tests {

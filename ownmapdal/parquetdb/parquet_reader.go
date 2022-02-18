@@ -4,15 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"io/ioutil"
+	"encoding/json"
 	"log"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/ownmap"
 	"github.com/jamesrr39/ownmap-app/ownmapdal"
@@ -38,13 +38,14 @@ type ParquetDatasource struct {
 func NewParquetDatasource(dirPath string) (*ParquetDatasource, errorsx.Error) {
 	datasetInfoPath := filepath.Join(dirPath, datasetInfoFileName)
 
-	infoBytes, err := ioutil.ReadFile(datasetInfoPath)
+	infoFile, err := os.Open(datasetInfoPath)
 	if err != nil {
 		return nil, errorsx.Wrap(err, "filepath", datasetInfoPath)
 	}
+	defer infoFile.Close()
 
 	datasetInfo := new(ownmap.DatasetInfo)
-	err = proto.Unmarshal(infoBytes, datasetInfo)
+	err = json.NewDecoder(infoFile).Decode(datasetInfo)
 	if err != nil {
 		return nil, errorsx.Wrap(err, "filepath", datasetInfoPath)
 	}
