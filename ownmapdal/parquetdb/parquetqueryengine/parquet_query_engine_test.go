@@ -58,7 +58,7 @@ func Test_Run(t *testing.T) {
 	}
 
 	results, runErr := query.Run(parquetReader, "Parquet_go_root")
-	require.NoError(t, runErr, string(runErr.Stack()))
+	require.NoError(t, runErr)
 
 	// sort results for deterministic result set
 	sort.Slice(results, func(i, j int) bool {
@@ -74,7 +74,7 @@ func Test_Run(t *testing.T) {
 
 const (
 	testFilename       = "testdata.parquet"
-	testFileSHA512Hash = "0319181ae009933fa5ca19aef4a629f08ca8628351246ce2e015b6c009b4a957e13b3a13f901ef699c16785cdf24b68e3df03b6e9befbef15de65118a602cec0"
+	testFileSHA512Hash = "288491e503aeba5b06b9237c7ed796908a6257cdee762d90f76977b6f87e514fa626f24e6581e3da0301698c08a2830f103c01edaa6fcddeba5d765ff9216991"
 )
 
 type tagType struct {
@@ -200,35 +200,36 @@ func ensureTestFile() errorsx.Error {
 
 const osmNodesSchema = `
 {
-	"Tag": "name=parquet_go_root",
+	"Tag": "name=Parquet_go_root",
 	"Fields": [
 	  {
-		"Tag": "name=id, type=INT64"
+		"Tag": "name=Id, type=INT64"
 	  },
 	  {
-		"Tag": "name=tags, type=LIST",
+		"Tag": "name=Tags, type=LIST",
 		"Fields": [
 		  {
-			"Tag": "name=element",
+			"Tag": "name=Element",
 			"Fields": [
 			  {
-				"Tag": "name=key, type=BYTE_ARRAY, convertedtype=UTF8"
+				"Tag": "name=Key, type=BYTE_ARRAY, convertedtype=UTF8"
 			  },
 			  {
-				"Tag": "name=value, type=BYTE_ARRAY, convertedtype=UTF8"
+				"Tag": "name=Value, type=BYTE_ARRAY, convertedtype=UTF8"
 			  }
 			]
 		  }
 		]
 	  },
 	  {
-		"Tag": "name=lat, type=DOUBLE"
+		"Tag": "name=Lat, type=DOUBLE"
 	  },
 	  {
-		"Tag": "name=lon, type=DOUBLE"
+		"Tag": "name=Lon, type=DOUBLE"
 	  }
 	]
-  }`
+}
+`
 
 var testNodes = []testNodeType{
 	{ID: 1, Lat: 10, Lon: -10},

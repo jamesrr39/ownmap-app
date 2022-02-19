@@ -10,8 +10,8 @@ import (
 )
 
 type JSONSchemaItemType struct {
-	Tag    string
-	Fields []*JSONSchemaItemType
+	Tag    string                `json:"Tag"`
+	Fields []*JSONSchemaItemType `json:"Fields,omitempty"`
 }
 
 func NewJSONSchemaItem() *JSONSchemaItemType {
@@ -46,7 +46,10 @@ func NewSchemaHandlerFromJSON(str string) (sh *SchemaHandler, err error) {
 		ln := len(stack)
 		item := stack[ln-1]
 		stack = stack[:ln-1]
-		info := common.StringToTag(item.Tag)
+		info, err := common.StringToTag(item.Tag)
+		if err != nil {
+			return nil, fmt.Errorf("failed parse tag: %s", err.Error())
+		}
 		var newInfo *common.Tag
 		if info.Type == "" { //struct
 			schema := parquet.NewSchemaElement()
@@ -94,6 +97,9 @@ func NewSchemaHandlerFromJSON(str string) (sh *SchemaHandler, err error) {
 			newInfo.InName, newInfo.ExName = "List", "list"
 			infos = append(infos, newInfo)
 
+			if len(item.Fields) != 1 {
+				return nil, fmt.Errorf("LIST needs exact 1 field to define element type")
+			}
 			stack = append(stack, item.Fields[0])
 
 		} else if info.Type == "MAP" { //map
@@ -126,11 +132,17 @@ func NewSchemaHandlerFromJSON(str string) (sh *SchemaHandler, err error) {
 			newInfo.InName, newInfo.ExName = "Key_value", "key_value"
 			infos = append(infos, newInfo)
 
+			if len(item.Fields) != 2 {
+				return nil, fmt.Errorf("MAP needs exact 2 fields to define key and value type")
+			}
 			stack = append(stack, item.Fields[1]) //put value
 			stack = append(stack, item.Fields[0]) //put key
 
 		} else { //normal variable
-			schema := common.NewSchemaElementFromTagMap(info)
+			schema, err := common.NewSchemaElementFromTagMap(info)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create schema from tag map: %s", err.Error())
+			}
 			schemaElements = append(schemaElements, schema)
 
 			newInfo = common.NewTag()

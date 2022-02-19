@@ -1,6 +1,7 @@
 package marshal
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -8,9 +9,9 @@ import (
 
 	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/layout"
-	"github.com/xitongsys/parquet-go/types"
-	"github.com/xitongsys/parquet-go/schema"
 	"github.com/xitongsys/parquet-go/parquet"
+	"github.com/xitongsys/parquet-go/schema"
+	"github.com/xitongsys/parquet-go/types"
 )
 
 //ss is []string
@@ -42,7 +43,7 @@ func MarshalJSON(ss []interface{}, schemaHandler *schema.SchemaHandler) (tb *map
 			res[pathStr].MaxDefinitionLevel, _ = schemaHandler.MaxDefinitionLevel(res[pathStr].Path)
 			res[pathStr].MaxRepetitionLevel, _ = schemaHandler.MaxRepetitionLevel(res[pathStr].Path)
 			res[pathStr].RepetitionType = schema.GetRepetitionType()
-			res[pathStr].Schema =  schemaHandler.SchemaElements[schemaHandler.MapIndex[pathStr]]
+			res[pathStr].Schema = schemaHandler.SchemaElements[schemaHandler.MapIndex[pathStr]]
 			res[pathStr].Info = schemaHandler.Infos[i]
 		}
 	}
@@ -55,8 +56,15 @@ func MarshalJSON(ss []interface{}, schemaHandler *schema.SchemaHandler) (tb *map
 		node := nodeBuf.GetNode()
 		var ui interface{}
 
+		var d *json.Decoder
+
+		switch t := ss[i].(type) {
+		case string:
+			d = json.NewDecoder(strings.NewReader(t))
+		case []byte:
+			d = json.NewDecoder(bytes.NewReader(t))
+		}
 		// `useNumber`causes the Decoder to unmarshal a number into an interface{} as a Number instead of as a float64.
-		d := json.NewDecoder(strings.NewReader(ss[i].(string)))
 		d.UseNumber()
 		d.Decode(&ui)
 
@@ -86,11 +94,11 @@ func MarshalJSON(ss []interface{}, schemaHandler *schema.SchemaHandler) (tb *map
 				keys := node.Val.MapKeys()
 
 				if schema.GetConvertedType() == parquet.ConvertedType_MAP { //real map
-					pathStr = pathStr + ".Key_value"
+					pathStr = pathStr + common.PAR_GO_PATH_DELIMITER + "Key_value"
 					if len(keys) <= 0 {
 						for key, table := range res {
 							if strings.HasPrefix(key, node.PathMap.Path) &&
-							(len(key) == len(node.PathMap.Path) || key[len(node.PathMap.Path)] == '.'){
+								(len(key) == len(node.PathMap.Path) || key[len(node.PathMap.Path)] == common.PAR_GO_PATH_DELIMITER[0]) {
 								table.Values = append(table.Values, nil)
 								table.DefinitionLevels = append(table.DefinitionLevels, node.DL)
 								table.RepetitionLevels = append(table.RepetitionLevels, node.RL)
@@ -141,7 +149,7 @@ func MarshalJSON(ss []interface{}, schemaHandler *schema.SchemaHandler) (tb *map
 					}
 					for key, _ := range node.PathMap.Children {
 						ki, ok := keysMap[key]
-						
+
 						if ok && node.Val.MapIndex(keys[ki]).Elem().IsValid() {
 							newNode := nodeBuf.GetNode()
 							newNode.PathMap = node.PathMap.Children[key]
@@ -160,7 +168,7 @@ func MarshalJSON(ss []interface{}, schemaHandler *schema.SchemaHandler) (tb *map
 							newPathStr := node.PathMap.Children[key].Path
 							for path, table := range res {
 								if strings.HasPrefix(path, newPathStr) &&
-									(len(path) == len(newPathStr) || path[len(newPathStr)] == '.') {
+									(len(path) == len(newPathStr) || path[len(newPathStr)] == common.PAR_GO_PATH_DELIMITER[0]) {
 
 									table.Values = append(table.Values, nil)
 									table.DefinitionLevels = append(table.DefinitionLevels, node.DL)
@@ -175,11 +183,11 @@ func MarshalJSON(ss []interface{}, schemaHandler *schema.SchemaHandler) (tb *map
 				ln := node.Val.Len()
 
 				if schema.GetConvertedType() == parquet.ConvertedType_LIST { // real LIST
-					pathStr = pathStr + ".List" + ".Element"
+					pathStr = pathStr + common.PAR_GO_PATH_DELIMITER + "List" + common.PAR_GO_PATH_DELIMITER + "Element"
 					if ln <= 0 {
 						for key, table := range res {
 							if strings.HasPrefix(key, node.PathMap.Path) &&
-							(len(key) == len(node.PathMap.Path) || key[len(node.PathMap.Path)] == '.'){
+								(len(key) == len(node.PathMap.Path) || key[len(node.PathMap.Path)] == common.PAR_GO_PATH_DELIMITER[0]) {
 								table.Values = append(table.Values, nil)
 								table.DefinitionLevels = append(table.DefinitionLevels, node.DL)
 								table.RepetitionLevels = append(table.RepetitionLevels, node.RL)
@@ -213,7 +221,7 @@ func MarshalJSON(ss []interface{}, schemaHandler *schema.SchemaHandler) (tb *map
 					if ln <= 0 {
 						for key, table := range res {
 							if strings.HasPrefix(key, node.PathMap.Path) &&
-							(len(key) == len(node.PathMap.Path) || key[len(node.PathMap.Path)] == '.'){
+								(len(key) == len(node.PathMap.Path) || key[len(node.PathMap.Path)] == common.PAR_GO_PATH_DELIMITER[0]) {
 								table.Values = append(table.Values, nil)
 								table.DefinitionLevels = append(table.DefinitionLevels, node.DL)
 								table.RepetitionLevels = append(table.RepetitionLevels, node.RL)
@@ -239,7 +247,10 @@ func MarshalJSON(ss []interface{}, schemaHandler *schema.SchemaHandler) (tb *map
 			} else {
 				table := res[node.PathMap.Path]
 				pT, cT := schema.Type, schema.ConvertedType
-				val := types.JSONTypeToParquetType(node.Val, pT, cT, int(schema.GetTypeLength()), int(schema.GetScale()))
+				val, err := types.JSONTypeToParquetType(node.Val, pT, cT, int(schema.GetTypeLength()), int(schema.GetScale()))
+				if err != nil {
+					return nil, err
+				}
 
 				table.Values = append(table.Values, val)
 				table.DefinitionLevels = append(table.DefinitionLevels, node.DL)

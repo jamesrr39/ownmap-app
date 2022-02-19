@@ -22,6 +22,7 @@ package thrift
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -74,19 +75,36 @@ func init() {
 	}
 }
 
-type TCompactProtocolFactory struct{}
+type TCompactProtocolFactory struct {
+	cfg *TConfiguration
+}
 
+// Deprecated: Use NewTCompactProtocolFactoryConf instead.
 func NewTCompactProtocolFactory() *TCompactProtocolFactory {
-	return &TCompactProtocolFactory{}
+	return NewTCompactProtocolFactoryConf(&TConfiguration{
+		noPropagation: true,
+	})
+}
+
+func NewTCompactProtocolFactoryConf(conf *TConfiguration) *TCompactProtocolFactory {
+	return &TCompactProtocolFactory{
+		cfg: conf,
+	}
 }
 
 func (p *TCompactProtocolFactory) GetProtocol(trans TTransport) TProtocol {
-	return NewTCompactProtocol(trans)
+	return NewTCompactProtocolConf(trans, p.cfg)
+}
+
+func (p *TCompactProtocolFactory) SetTConfiguration(conf *TConfiguration) {
+	p.cfg = conf
 }
 
 type TCompactProtocol struct {
 	trans         TRichTransport
 	origTransport TTransport
+
+	cfg *TConfiguration
 
 	// Used to keep track of the last field for the current and previous structs,
 	// so we can do the delta stuff.
@@ -106,9 +124,19 @@ type TCompactProtocol struct {
 	buffer             [64]byte
 }
 
-// Create a TCompactProtocol given a TTransport
+// Deprecated: Use NewTCompactProtocolConf instead.
 func NewTCompactProtocol(trans TTransport) *TCompactProtocol {
-	p := &TCompactProtocol{origTransport: trans, lastField: []int{}}
+	return NewTCompactProtocolConf(trans, &TConfiguration{
+		noPropagation: true,
+	})
+}
+
+func NewTCompactProtocolConf(trans TTransport, conf *TConfiguration) *TCompactProtocol {
+	PropagateTConfiguration(trans, conf)
+	p := &TCompactProtocol{
+		origTransport: trans,
+		cfg:           conf,
+	}
 	if et, ok := trans.(TRichTransport); ok {
 		p.trans = et
 	} else {
@@ -116,7 +144,6 @@ func NewTCompactProtocol(trans TTransport) *TCompactProtocol {
 	}
 
 	return p
-
 }
 
 //
@@ -158,6 +185,9 @@ func (p *TCompactProtocol) WriteStructBegin(ctx context.Context, name string) er
 // this as an opportunity to pop the last field from the current struct off
 // of the field stack.
 func (p *TCompactProtocol) WriteStructEnd(ctx context.Context) error {
+	if len(p.lastField) <= 0 {
+		return NewTProtocolExceptionWithType(INVALID_DATA, errors.New("WriteStructEnd called without matching WriteStructBegin call before"))
+	}
 	p.lastFieldId = p.lastField[len(p.lastField)-1]
 	p.lastField = p.lastField[:len(p.lastField)-1]
 	return nil
@@ -386,6 +416,9 @@ func (p *TCompactProtocol) ReadStructBegin(ctx context.Context) (name string, er
 // this struct from the field stack.
 func (p *TCompactProtocol) ReadStructEnd(ctx context.Context) error {
 	// consume the last field we read off the wire.
+	if len(p.lastField) <= 0 {
+		return NewTProtocolExceptionWithType(INVALID_DATA, errors.New("ReadStructEnd called without matching ReadStructBegin call before"))
+	}
 	p.lastFieldId = p.lastField[len(p.lastField)-1]
 	p.lastField = p.lastField[:len(p.lastField)-1]
 	return nil
@@ -444,8 +477,8 @@ func (p *TCompactProtocol) ReadMapBegin(ctx context.Context) (keyType TType, val
 		err = NewTProtocolException(e)
 		return
 	}
-	if size32 < 0 {
-		err = invalidDataLength
+	err = checkSizeForProtocol(size32, p.cfg)
+	if err != nil {
 		return
 	}
 	size = int(size32)
@@ -480,11 +513,11 @@ func (p *TCompactProtocol) ReadListBegin(ctx context.Context) (elemType TType, s
 			err = NewTProtocolException(e)
 			return
 		}
-		if size2 < 0 {
-			err = invalidDataLength
-			return
-		}
 		size = int(size2)
+	}
+	err = checkSizeForProtocol(size32, p.cfg)
+	if err != nil {
+		return
 	}
 	elemType, e := p.getTType(tCompactType(size_and_type))
 	if e != nil {
@@ -569,20 +602,21 @@ func (p *TCompactProtocol) ReadString(ctx context.Context) (value string, err er
 	if e != nil {
 		return "", NewTProtocolException(e)
 	}
-	if length < 0 {
-		return "", invalidDataLength
+	err = checkSizeForProtocol(length, p.cfg)
+	if err != nil {
+		return
 	}
-
 	if length == 0 {
 		return "", nil
 	}
-	var buf []byte
-	if length <= int32(len(p.buffer)) {
-		buf = p.buffer[0:length]
-	} else {
-		buf = make([]byte, length)
+	if length < int32(len(p.buffer)) {
+		// Avoid allocation on small reads
+		buf := p.buffer[:length]
+		read, e := io.ReadFull(p.trans, buf)
+		return string(buf[:read]), NewTProtocolException(e)
 	}
-	_, e = io.ReadFull(p.trans, buf)
+
+	buf, e := safeReadBytes(length, p.trans)
 	return string(buf), NewTProtocolException(e)
 }
 
@@ -592,15 +626,15 @@ func (p *TCompactProtocol) ReadBinary(ctx context.Context) (value []byte, err er
 	if e != nil {
 		return nil, NewTProtocolException(e)
 	}
+	err = checkSizeForProtocol(length, p.cfg)
+	if err != nil {
+		return
+	}
 	if length == 0 {
 		return []byte{}, nil
 	}
-	if length < 0 {
-		return nil, invalidDataLength
-	}
 
-	buf := make([]byte, length)
-	_, e = io.ReadFull(p.trans, buf)
+	buf, e := safeReadBytes(length, p.trans)
 	return buf, NewTProtocolException(e)
 }
 
@@ -811,10 +845,21 @@ func (p *TCompactProtocol) getTType(t tCompactType) (TType, error) {
 	case COMPACT_STRUCT:
 		return STRUCT, nil
 	}
-	return STOP, TException(fmt.Errorf("don't know what type: %v", t&0x0f))
+	return STOP, NewTProtocolException(fmt.Errorf("don't know what type: %v", t&0x0f))
 }
 
 // Given a TType value, find the appropriate TCompactProtocol.Types constant.
 func (p *TCompactProtocol) getCompactType(t TType) tCompactType {
 	return ttypeToCompactType[t]
 }
+
+func (p *TCompactProtocol) SetTConfiguration(conf *TConfiguration) {
+	PropagateTConfiguration(p.trans, conf)
+	PropagateTConfiguration(p.origTransport, conf)
+	p.cfg = conf
+}
+
+var (
+	_ TConfigurationSetter = (*TCompactProtocolFactory)(nil)
+	_ TConfigurationSetter = (*TCompactProtocol)(nil)
+)
