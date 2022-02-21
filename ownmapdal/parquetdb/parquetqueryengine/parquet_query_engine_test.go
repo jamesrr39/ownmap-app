@@ -51,13 +51,11 @@ func Test_Run(t *testing.T) {
 	}
 
 	expectedResults := []*ResultRow{
-		// {int64(1), float64(10), float64(-10)},
-		// {int64(2), float64(10.1), float64(-10.1)},
 		{int64(3), float64(10.2), float64(-10.2)},
 		{int64(4), float64(10.3), float64(-10.3)},
 	}
 
-	results, runErr := query.Run(parquetReader, "Parquet_go_root")
+	results, runErr := query.Run(parquetReader, parquetReader.Footer.GetRowGroups(), "Parquet_go_root")
 	require.NoError(t, runErr)
 
 	// sort results for deterministic result set

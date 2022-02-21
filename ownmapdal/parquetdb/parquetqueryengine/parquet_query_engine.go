@@ -6,14 +6,19 @@ import (
 	"strings"
 
 	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/paulmach/osm"
 	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/parquet"
-	"github.com/xitongsys/parquet-go/reader"
 )
+
+type ParquetReader interface {
+	ReadColumnByPath(path string, numRows int64) (values []interface{}, repetitionLevels []int32, definitionLevels []int32, err error)
+	GetNumRows() int64
+}
 
 type Query struct {
 	Select []string
-	// From   *reader.ParquetReader
+	// From   ParquetReader
 	Where Filter
 	// Limit int32 // 0 = no limit. Int32 because a Go slice can only be int32 items long
 }
@@ -24,13 +29,27 @@ type rowMapType struct {
 	values map[fieldNameType]interface{}
 }
 
+type rowGroupValuesCollectionType map[int]*rowMapType
+
+type valueType interface{}
+
+type queryRunnerType struct {
+	columnsScannedMap map[string][]valueType
+	// rowGroupValues    rowGroupValuesCollectionType
+}
+
+func newQueryRunnerType() *queryRunnerType {
+	return &queryRunnerType{
+		columnsScannedMap: make(map[string][]valueType),
+		// rowGroupValues:    make(rowGroupValuesCollectionType),
+	}
+}
+
 func newRowMapType() *rowMapType {
 	return &rowMapType{
 		values: make(map[fieldNameType]interface{}),
 	}
 }
-
-type rowGroupValuesCollectionType map[int]*rowMapType
 
 type ResultRow []interface{}
 
@@ -63,7 +82,7 @@ func (q *Query) isRowGroupInteresting(rowGroup *parquet.RowGroup) (bool, errorsx
 	}
 }
 
-func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName string) ([]*ResultRow, errorsx.Error) {
+func (q *Query) Run(parquetReader ParquetReader, rowGroups []*parquet.RowGroup, rootSchemaElementName string) ([]*ResultRow, errorsx.Error) {
 	fieldNamesWantedForWhereClause := make(map[string]struct{})
 	comparativeFilters := q.Where.GetComparativeFilters()
 	for _, comparativeFilter := range comparativeFilters {
@@ -73,7 +92,6 @@ func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName s
 	results := []*ResultRow{}
 
 	// first evaluate rows IDs for scanning by WHERE clause
-	rowGroups := parquetReader.Footer.GetRowGroups()
 	for i, rowGroup := range rowGroups {
 		log.Printf("evaluating rowGroup ID: %d :: num rows: %d\n", i, rowGroup.NumRows)
 
@@ -97,8 +115,15 @@ func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName s
 			}
 		}
 
+		rowGroupBounds, err := debug__BoundsForRowGroup(rowGroup)
+		if err != nil {
+			return nil, err
+		}
+		log.Printf("filter:\nWHERE: %s\nrow group bounds: %#v\n", q.Where, rowGroupBounds)
+
 		// 2. scan interesting rows
-		err = q.Where.ScanRowGroup(rowGroup, parquetReader, rowGroupValues, rootSchemaElementName)
+		queryRunner := newQueryRunnerType()
+		err = q.Where.ScanRowGroup(rowGroup, parquetReader, queryRunner, rowGroupValues, rootSchemaElementName)
 		if err != nil {
 			return nil, err
 		}
@@ -123,27 +148,35 @@ func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName s
 			}
 		}
 
-		for _, valSet := range rowGroupValues {
-			var resultRow ResultRow
+		rowGroupResults := rowGroupValuesToResults(rowGroupValues, q.Select)
 
-			for _, selectCol := range q.Select {
-				resultRow = append(resultRow, valSet.values[fieldNameType(selectCol)])
-			}
-
-			results = append(results, &resultRow)
-		}
+		results = append(results, rowGroupResults...)
 	}
 
-	log.Printf("row groups: %d\n", len(rowGroups))
+	log.Printf("row groups: %d, results len: %d\n", len(rowGroups), len(results))
 	// parquetReader.ReadColumnByPath()
 
 	return results, nil
 }
 
+func rowGroupValuesToResults(rowGroupValues rowGroupValuesCollectionType, selectCols []string) []*ResultRow {
+	var results []*ResultRow
+	for _, valSet := range rowGroupValues {
+		var resultRow ResultRow
+
+		for _, selectCol := range selectCols {
+			resultRow = append(resultRow, valSet.values[fieldNameType(selectCol)])
+		}
+
+		results = append(results, &resultRow)
+	}
+	return results
+}
+
 // func fetchOtherValues(
 // 	valuesToFetchMap map[fieldNameType][]int,
 // 	rowIDsToFetchInRowGroup map[int]*rowMapType,
-// 	parquetReader *reader.ParquetReader,
+// 	parquetReader ParquetReader,
 // 	rowGroup *parquet.RowGroup,
 // 	rootSchemaElementName string,
 // ) errorsx.Error {
@@ -181,8 +214,12 @@ func (q *Query) Run(parquetReader *reader.ParquetReader, rootSchemaElementName s
 // 	return nil
 // }
 
-func addColumnValsToRowGroupValues(parquetReader *reader.ParquetReader, rowGroup *parquet.RowGroup, rowGroupValues rowGroupValuesCollectionType, selectCol, rootSchemaElementName string) errorsx.Error {
+func addColumnValsToRowGroupValues(parquetReader ParquetReader, rowGroup *parquet.RowGroup, rowGroupValues rowGroupValuesCollectionType, selectCol, rootSchemaElementName string) errorsx.Error {
 	fullPath := common.PathToStr([]string{rootSchemaElementName, selectCol})
+	// fullPath := strings.Join([]string{rootSchemaElementName, selectCol}, ".")
+	// fullPath := selectCol
+
+	// log.Printf("mapIndex: %#v\n", parquetReader.SchemaHandler.MapIndex)
 
 	vals, repetionLevels, definitionLevels, err := parquetReader.ReadColumnByPath(fullPath, rowGroup.GetNumRows())
 	if err != nil {
@@ -220,4 +257,46 @@ func getFullParquetFieldPath(column *parquet.ColumnChunk, rootSchemaElementName 
 			column.GetMetaData().PathInSchema...,
 		),
 	)
+}
+
+func debug__BoundsForRowGroup(rowGroup *parquet.RowGroup) (osm.Bounds, errorsx.Error) {
+	var bounds osm.Bounds
+
+	for _, column := range rowGroup.GetColumns() {
+		columnNameText := strings.Join(column.MetaData.PathInSchema, ".")
+		switch columnNameText {
+		case "Lat":
+			maxLat, err := bytesToOperand(column.MetaData.Statistics.MaxValue, column.MetaData.Type)
+			if err != nil {
+				return bounds, errorsx.Wrap(err)
+			}
+
+			bounds.MaxLat = float64(maxLat.(Float64Operand))
+
+			minLat, err := bytesToOperand(column.MetaData.Statistics.MinValue, column.MetaData.Type)
+			if err != nil {
+				return bounds, errorsx.Wrap(err)
+			}
+
+			bounds.MinLat = float64(minLat.(Float64Operand))
+		case "Lon":
+			maxLon, err := bytesToOperand(column.MetaData.Statistics.MaxValue, column.MetaData.Type)
+			if err != nil {
+				return bounds, errorsx.Wrap(err)
+			}
+
+			bounds.MaxLon = float64(maxLon.(Float64Operand))
+
+			minLon, err := bytesToOperand(column.MetaData.Statistics.MinValue, column.MetaData.Type)
+			if err != nil {
+				return bounds, errorsx.Wrap(err)
+			}
+
+			bounds.MinLon = float64(minLon.(Float64Operand))
+		default:
+			log.Printf("not using column: %s\n", columnNameText)
+		}
+	}
+
+	return bounds, nil
 }

@@ -1,9 +1,10 @@
 package parquetqueryengine
 
 import (
+	"fmt"
+
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/xitongsys/parquet-go/parquet"
-	"github.com/xitongsys/parquet-go/reader"
 )
 
 type ShouldScanResult int
@@ -31,6 +32,7 @@ type Filter interface {
 	ShouldFilterItemIn(fieldName string, value Operand) (ShouldScanResult, errorsx.Error)
 	ShouldRowGroupBeScanned(rowGroup *parquet.RowGroup) (ShouldScanResult, errorsx.Error)
 	Validate() errorsx.Error
-	ScanRowGroup(rowGroup *parquet.RowGroup, parquetReader *reader.ParquetReader, rowGroupValues rowGroupValuesCollectionType, rootSchemaElementName string) errorsx.Error
+	ScanRowGroup(rowGroup *parquet.RowGroup, parquetReader ParquetReader, queryRunner *queryRunnerType, subRowGroupValues rowGroupValuesCollectionType, rootSchemaElementName string) errorsx.Error
 	BuildColumnNamesWanted() map[string]struct{} // map[columnName]void
+	fmt.Stringer
 }

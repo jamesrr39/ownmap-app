@@ -1,28 +1,29 @@
 package parquetdb
 
 import (
-	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/ownmap"
 	"github.com/jamesrr39/ownmap-app/ownmapdal"
+	"github.com/jamesrr39/ownmap-app/ownmapdal/parquetdb/parquetqueryengine"
 	"github.com/paulmach/osm"
 	"github.com/xitongsys/parquet-go-source/local"
-	"github.com/xitongsys/parquet-go/encoding"
 	parquetreader "github.com/xitongsys/parquet-go/reader"
 )
 
-var _ ownmapdal.DataSourceConn = &ParquetDatasource{}
+var (
+	// TODO: configurable parallelism
+	parallelism = int64(runtime.NumCPU())
+
+	_ ownmapdal.DataSourceConn = &ParquetDatasource{}
+)
 
 type ParquetDatasource struct {
 	dirPath     string
@@ -59,7 +60,7 @@ func NewParquetDatasource(dirPath string) (*ParquetDatasource, errorsx.Error) {
 			return nil, errorsx.Wrap(err, "filepath", filePath)
 		}
 
-		pr, err := parquetreader.NewParquetReader(fileReader, fileNameAndSchema.Schema, int64(runtime.NumCPU()))
+		pr, err := parquetreader.NewParquetReader(fileReader, fileNameAndSchema.Schema, parallelism)
 		if err != nil {
 			return nil, errorsx.Wrap(err, "filepath", filePath)
 		}
@@ -86,75 +87,70 @@ func (ds *ParquetDatasource) DatasetInfo() (*ownmap.DatasetInfo, errorsx.Error) 
 	return ds.datasetInfo, nil
 }
 func (ds *ParquetDatasource) GetInBounds(ctx context.Context, bounds osm.Bounds, filter *ownmapdal.GetInBoundsFilter) (ownmapdal.TagNodeMap, ownmapdal.TagWayMap, ownmapdal.TagRelationMap, errorsx.Error) {
+	// parquet reader is (I think) not thread-safe. TODO: pool of readers, or something similar.
 	ds.mu.Lock()
 	defer ds.mu.Unlock()
 
-	startTime := time.Now()
-	numRows := ds.nodesParquetReaderFile.GetNumRows()
+	var nodeFilters []parquetqueryengine.Filter
 
-	classes, repititionLevels, dls, err := ds.nodesParquetReaderFile.ReadColumnByPath("Parquet_go_root.Tags.List.Element.Key", numRows)
-	if err != nil {
-		return nil, nil, nil, errorsx.Wrap(err)
-	}
-
-	for _, rowGroup := range ds.nodesParquetReaderFile.Footer.RowGroups {
-		for _, column := range rowGroup.GetColumns() {
-			log.Printf("path: %q, min: %v, max: %v\n", strings.Join(column.MetaData.PathInSchema, ","), column.MetaData.Statistics.MinValue, column.MetaData.Statistics.MaxValue)
-			switch column.MetaData.PathInSchema[0] {
-			case "Id":
-				log.Printf("min ID: %d, max ID: %d\n", binary.LittleEndian.Uint64(column.MetaData.Statistics.MinValue), binary.LittleEndian.Uint64(column.MetaData.Statistics.MaxValue))
-			case "Lat":
-				vals, err := encoding.ReadPlain(
-					bytes.NewReader(column.MetaData.Statistics.MinValue),
-					column.MetaData.Type,
-					// uint64(len(column.MetaData.Statistics.MinValue)),
-					uint64(len(column.MetaData.Statistics.MinValue)/8),
-					0)
-				if err != nil {
-					panic(err)
-				}
-				log.Printf("min Lat: %f\n", vals[0])
-			case "Tags":
-				log.Printf("path: %s, min: %q, max: %q\n", strings.Join(column.MetaData.PathInSchema, ","), column.MetaData.Statistics.MinValue, column.MetaData.Statistics.MaxValue)
-			}
-
+	for _, filterObject := range filter.Objects {
+		switch filterObject.ObjectType {
+		case ownmap.ObjectTypeNode:
+			nodeFilters = append(nodeFilters, &parquetqueryengine.ComparativeFilter{
+				FieldName: "Tags",
+				Operator:  parquetqueryengine.ComparativeOperatorContains,
+				Operand:   parquetqueryengine.StringOperand(filterObject.TagKey),
+			})
 		}
 	}
 
+	coordinateFilter := []parquetqueryengine.Filter{
+		&parquetqueryengine.ComparativeFilter{
+			FieldName: "Lat",
+			Operator:  parquetqueryengine.ComparativeOperatorGreaterThanOrEqualTo,
+			Operand:   parquetqueryengine.Float64Operand(bounds.MinLat),
+		},
+		&parquetqueryengine.ComparativeFilter{
+			FieldName: "Lat",
+			Operator:  parquetqueryengine.ComparativeOperatorLessThanOrEqualTo,
+			Operand:   parquetqueryengine.Float64Operand(bounds.MaxLat),
+		},
+		&parquetqueryengine.ComparativeFilter{
+			FieldName: "Lon",
+			Operator:  parquetqueryengine.ComparativeOperatorGreaterThanOrEqualTo,
+			Operand:   parquetqueryengine.Float64Operand(bounds.MinLon),
+		},
+		&parquetqueryengine.ComparativeFilter{
+			FieldName: "Lon",
+			Operator:  parquetqueryengine.ComparativeOperatorLessThanOrEqualTo,
+			Operand:   parquetqueryengine.Float64Operand(bounds.MaxLon),
+		},
+	}
+
+	query := parquetqueryengine.Query{
+		Select: []string{"Id", "Lat", "Lon"}, //"Tags"},
+		Where: &parquetqueryengine.LogicalFilter{
+			Operator:     parquetqueryengine.LogicalFilterOperatorAnd,
+			ChildFilters: append(coordinateFilter), //, nodeFilters...),
+		},
+	}
+
+	results, err := query.Run(ds.nodesParquetReaderFile, ds.nodesParquetReaderFile.Footer.GetRowGroups(), "Parquet_go_root")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// reset reader
 	ds.nodesParquetReaderFile.ReadStop()
 
-	duration := time.Since(startTime)
-	log.Printf("read %d rows in %s\n", numRows, duration)
+	tagNodeMap := make(ownmapdal.TagNodeMap)
 
-	println("classes, repetitionLevels, DLS", classes, repititionLevels, dls)
+	for _, result := range results {
+		// Id, Lat, Lon, Tags
+		tags := (*result)[3]
+		log.Printf("got result. Tags type: %T. Result: %#v\n", tags, result)
+	}
+	log.Printf("total results: %d\n", len(results))
 
-	// var currItemTags []string
-
-	// rowID := -1
-	// for i, class := range classes {
-	// 	repititionLevel := repititionLevels[i]
-	// 	if repititionLevel == 0 {
-	// 		rowID++
-	// 	}
-
-	// 	if class == nil {
-	// 		continue
-	// 	}
-
-	// 	tagKey := class.(string)
-
-	// 	isNewItem := repititionLevel == 0
-	// 	if isNewItem && currItemTags != nil {
-	// 		// log.Printf("end of item with tags: %#v, at index %d\n", currItemTags, rowID)
-	// 		currItemTags = nil
-	// 	}
-
-	// 	currItemTags = append(currItemTags, tagKey)
-
-	// 	// log.Println("tk:", tagKey, "i", i, "rls", rls[i], "dls", dls[i])
-	// }
-	// log.Printf("end of item with tags: %#v", currItemTags)
-	// log.Printf("%T :: %d :: %d :: %d\n", classes, len(classes), len(repititionLevels), len(dls))
-	time.Sleep(time.Second)
-	panic("not implemented")
+	return tagNodeMap, make(ownmapdal.TagWayMap), make(ownmapdal.TagRelationMap), nil
 }

@@ -33,7 +33,7 @@ func getFileNamesAndSchemas() []parquetFileType {
 	}
 }
 
-const datasetInfoFileName = "dataset_info.pb"
+const datasetInfoFileName = "dataset_info.json"
 
 var (
 	//go:embed nodes_schema.json

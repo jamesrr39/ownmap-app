@@ -3,20 +3,21 @@ package parquetqueryengine
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/xitongsys/parquet-go/encoding"
 	"github.com/xitongsys/parquet-go/parquet"
-	"github.com/xitongsys/parquet-go/reader"
 )
 
 type ComparativeOperator string
 
 const (
-	ComparativeOperatorGreaterThan = ">"
-	ComparativeOperatorLessThan    = "<"
+	ComparativeOperatorGreaterThan          ComparativeOperator = ">"
+	ComparativeOperatorLessThan             ComparativeOperator = "<"
+	ComparativeOperatorLessThanOrEqualTo    ComparativeOperator = "<="
+	ComparativeOperatorGreaterThanOrEqualTo ComparativeOperator = ">="
+	ComparativeOperatorContains             ComparativeOperator = "ANY"
 )
 
 type ComparativeFilter struct {
@@ -33,7 +34,7 @@ func (cf *ComparativeFilter) Validate() errorsx.Error {
 	return nil
 }
 
-func (cf *ComparativeFilter) ScanRowGroup(rowGroup *parquet.RowGroup, parquetReader *reader.ParquetReader, rowGroupValues rowGroupValuesCollectionType, rootSchemaElementName string) errorsx.Error {
+func (cf *ComparativeFilter) ScanRowGroup(rowGroup *parquet.RowGroup, parquetReader ParquetReader, queryRunner *queryRunnerType, rowGroupValues rowGroupValuesCollectionType, rootSchemaElementName string) errorsx.Error {
 	var column *parquet.ColumnChunk
 
 	for _, col := range rowGroup.GetColumns() {
@@ -49,66 +50,84 @@ func (cf *ComparativeFilter) ScanRowGroup(rowGroup *parquet.RowGroup, parquetRea
 		return nil
 	}
 
-	// rowGroup.NumRows
-	// reader.NewParquetColumnReader()
-
-	// pf := thrift.NewTCompactProtocolFactory()
-	// protocol := pf.GetProtocol(thrift.NewStreamTransportR(pr.PFile))
-
-	// err := column.Read(context.Background(), protocol)
-	// if err != nil {
-	// 	return errorsx.Wrap(err)
-	// }
-
 	// TODO: pr.SkipRowsByPath()
 	path := getFullParquetFieldPath(column, rootSchemaElementName)
-	values, repetitionLevels, definitionLevels, err := parquetReader.ReadColumnByPath(path, parquetReader.Footer.NumRows)
-	if err != nil {
-		return errorsx.Wrap(err, "path", path)
-	}
-
-	for i, value := range values {
-		if repetitionLevels[i] != 0 {
-			panic("not supported: repetitionLevels")
-		}
-		if definitionLevels[i] != 0 {
-			panic("not supported: definitionLevels")
+	_, columnAlreadyScanned := queryRunner.columnsScannedMap[path]
+	if columnAlreadyScanned {
+		// TODO: store the value, repetition level, definition level?
+		for i, value := range queryRunner.columnsScannedMap[path] {
+			err := cf.processValue(value, 0, 0, i, rowGroupValues)
+			if err != nil {
+				return errorsx.Wrap(err)
+			}
 		}
 
-		var op Operand
+	} else {
 
-		switch val := value.(type) {
-		case int64:
-			op = Int64Operand(val)
-		case float64:
-			op = Float64Operand(val)
-		default:
-			panic(fmt.Sprintf("unsupported value type:: %T", val))
-		}
-
-		result, err := cf.ShouldFilterItemIn(cf.FieldName, op)
+		values, repetitionLevels, definitionLevels, err := parquetReader.ReadColumnByPath(path, parquetReader.GetNumRows())
 		if err != nil {
-			return errorsx.Wrap(err)
+			return errorsx.Wrap(err, "path", path)
 		}
 
-		switch result {
-		case ShouldScanResultNo:
-			continue
-		case ShouldScanResultYes:
-
-			row, ok := rowGroupValues[i]
-			if !ok {
-				row = &rowMapType{
-					values: make(map[fieldNameType]interface{}),
-				}
-				rowGroupValues[i] = row
+		for i, value := range values {
+			if repetitionLevels[i] != 0 {
+				panic("not supported")
+			}
+			if definitionLevels[i] != 0 {
+				panic("not supported")
 			}
 
-			row.values[fieldNameType(cf.FieldName)] = value
+			queryRunner.columnsScannedMap[path] = append(queryRunner.columnsScannedMap[path], value)
 
-		default:
-			panic(fmt.Sprintf("unexpected scan result: %v", result))
+			err = cf.processValue(value, repetitionLevels[i], definitionLevels[i], i, rowGroupValues)
+			if err != nil {
+				return errorsx.Wrap(err)
+			}
 		}
+	}
+	return nil
+}
+
+func (cf *ComparativeFilter) processValue(value interface{}, repetitionLevel, definitionLevel int32, rowIndex int, rowGroupValues rowGroupValuesCollectionType) errorsx.Error {
+	if repetitionLevel != 0 {
+		panic("not supported: repetitionLevels")
+	}
+	if definitionLevel != 0 {
+		panic("not supported: definitionLevels")
+	}
+
+	var op Operand
+
+	switch val := value.(type) {
+	case int64:
+		op = Int64Operand(val)
+	case float64:
+		op = Float64Operand(val)
+	default:
+		panic(fmt.Sprintf("unsupported value type:: %T", val))
+	}
+
+	result, err := cf.ShouldFilterItemIn(cf.FieldName, op)
+	if err != nil {
+		return errorsx.Wrap(err)
+	}
+
+	switch result {
+	case ShouldScanResultNo:
+		return nil
+	case ShouldScanResultYes:
+		row, ok := rowGroupValues[rowIndex]
+		if !ok {
+			row = &rowMapType{
+				values: make(map[fieldNameType]interface{}),
+			}
+			rowGroupValues[rowIndex] = row
+		}
+
+		row.values[fieldNameType(cf.FieldName)] = value
+
+	default:
+		panic(fmt.Sprintf("unexpected scan result: %v", result))
 	}
 
 	return nil
@@ -132,13 +151,27 @@ func (cf *ComparativeFilter) ShouldRowGroupBeScanned(rowGroup *parquet.RowGroup)
 
 	switch cf.Operator {
 	case ComparativeOperatorLessThan:
-
 		colMinVal, err := bytesToOperand(column.MetaData.Statistics.MinValue, column.MetaData.Type)
 		if err != nil {
 			return ShouldScanResultNo, errorsx.Wrap(err)
 		}
 
 		isLess, err := colMinVal.IsLessThan(cf.Operand)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		if isLess {
+			return ShouldScanResultYes, nil
+		}
+		return ShouldScanResultNo, nil
+	case ComparativeOperatorLessThanOrEqualTo:
+		colMinVal, err := bytesToOperand(column.MetaData.Statistics.MinValue, column.MetaData.Type)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		isLess, err := colMinVal.IsLessThanOrEqualTo(cf.Operand)
 		if err != nil {
 			return ShouldScanResultNo, errorsx.Wrap(err)
 		}
@@ -154,8 +187,6 @@ func (cf *ComparativeFilter) ShouldRowGroupBeScanned(rowGroup *parquet.RowGroup)
 			return ShouldScanResultNo, errorsx.Wrap(err)
 		}
 
-		log.Printf("colMinVal:: %#v :: %#v\n", colMaxVal, cf.Operand)
-
 		isGreater, err := colMaxVal.IsGreaterThan(cf.Operand)
 		if err != nil {
 			return ShouldScanResultNo, errorsx.Wrap(err)
@@ -165,6 +196,52 @@ func (cf *ComparativeFilter) ShouldRowGroupBeScanned(rowGroup *parquet.RowGroup)
 			return ShouldScanResultYes, nil
 		}
 		return ShouldScanResultNo, nil
+	case ComparativeOperatorGreaterThanOrEqualTo:
+
+		colMaxVal, err := bytesToOperand(column.MetaData.Statistics.MaxValue, column.MetaData.Type)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		isGreater, err := colMaxVal.IsGreaterThanOrEqualTo(cf.Operand)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		if isGreater {
+			return ShouldScanResultYes, nil
+		}
+		return ShouldScanResultNo, nil
+	case ComparativeOperatorContains:
+		colMaxVal, err := bytesToOperand(column.MetaData.Statistics.MaxValue, column.MetaData.Type)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		colMaxLessThanOperand, err := colMaxVal.IsLessThan(cf.Operand)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		if colMaxLessThanOperand {
+			return ShouldScanResultNo, nil
+		}
+
+		colMinVal, err := bytesToOperand(column.MetaData.Statistics.MinValue, column.MetaData.Type)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		colMinGreaterThanOperand, err := colMinVal.IsGreaterThan(cf.Operand)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		if colMinGreaterThanOperand {
+			return ShouldScanResultNo, nil
+		}
+
+		return ShouldScanResultYes, nil
 	}
 
 	return ShouldScanResultNo, errorsx.Errorf("unrecognised operator: %q", cf.Operator)
@@ -195,6 +272,26 @@ func (cf *ComparativeFilter) ShouldColumnBeScanned(columnMetadata *parquet.Colum
 			return ShouldScanResultYes, nil
 		}
 		return ShouldScanResultNo, nil
+
+	case ComparativeOperatorLessThanOrEqualTo:
+		if cf.Operand == nil {
+			return ShouldScanResultNo, errorsx.Errorf("operand is nil")
+		}
+
+		colMinVal, err := bytesToOperand(columnMetadata.Statistics.MinValue, columnMetadata.Type)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		isLess, err := colMinVal.IsLessThanOrEqualTo(cf.Operand)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		if isLess {
+			return ShouldScanResultYes, nil
+		}
+		return ShouldScanResultNo, nil
 	case ComparativeOperatorGreaterThan:
 		if cf.Operand == nil {
 			return ShouldScanResultNo, errorsx.Errorf("operand is nil")
@@ -205,9 +302,26 @@ func (cf *ComparativeFilter) ShouldColumnBeScanned(columnMetadata *parquet.Colum
 			return ShouldScanResultNo, errorsx.Wrap(err)
 		}
 
-		log.Printf("colMinVal:: %#v :: %#v\n", colMaxVal, cf.Operand)
-
 		isGreater, err := colMaxVal.IsGreaterThan(cf.Operand)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		if isGreater {
+			return ShouldScanResultYes, nil
+		}
+		return ShouldScanResultNo, nil
+	case ComparativeOperatorGreaterThanOrEqualTo:
+		if cf.Operand == nil {
+			return ShouldScanResultNo, errorsx.Errorf("operand is nil")
+		}
+
+		colMaxVal, err := bytesToOperand(columnMetadata.Statistics.MaxValue, columnMetadata.Type)
+		if err != nil {
+			return ShouldScanResultNo, errorsx.Wrap(err)
+		}
+
+		isGreater, err := colMaxVal.IsGreaterThanOrEqualTo(cf.Operand)
 		if err != nil {
 			return ShouldScanResultNo, errorsx.Wrap(err)
 		}
@@ -240,12 +354,38 @@ func (cf *ComparativeFilter) ShouldFilterItemIn(fieldName string, value Operand)
 			return ShouldScanResultYes, nil
 		}
 		return ShouldScanResultNo, nil
+	case ComparativeOperatorLessThanOrEqualTo:
+		if cf.Operand == nil {
+			return 0, errorsx.Errorf("operand is nil")
+		}
+
+		isLess, err := value.IsLessThanOrEqualTo(cf.Operand)
+		if err != nil {
+			return 0, errorsx.Wrap(err)
+		}
+		if isLess {
+			return ShouldScanResultYes, nil
+		}
+		return ShouldScanResultNo, nil
 	case ComparativeOperatorGreaterThan:
 		if cf.Operand == nil {
 			return 0, errorsx.Errorf("operand is nil")
 		}
 
 		isGreater, err := value.IsGreaterThan(cf.Operand)
+		if err != nil {
+			return 0, errorsx.Wrap(err)
+		}
+		if isGreater {
+			return ShouldScanResultYes, nil
+		}
+		return ShouldScanResultNo, nil
+	case ComparativeOperatorGreaterThanOrEqualTo:
+		if cf.Operand == nil {
+			return 0, errorsx.Errorf("operand is nil")
+		}
+
+		isGreater, err := value.IsGreaterThanOrEqualTo(cf.Operand)
 		if err != nil {
 			return 0, errorsx.Wrap(err)
 		}
@@ -289,4 +429,8 @@ func bytesToOperand(val []byte, valueType parquet.Type) (Operand, errorsx.Error)
 	default:
 		return nil, errorsx.Errorf("unhandled type: %q", valueType)
 	}
+}
+
+func (cf *ComparativeFilter) String() string {
+	return fmt.Sprintf("%s %s %v", cf.FieldName, cf.Operator, cf.Operand)
 }

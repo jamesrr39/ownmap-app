@@ -1,42 +1,42 @@
 {
-    "Tag": "name=parquet_go_root",
+    "Tag": "name=Parquet_go_root",
     "Fields": [
         {
-            "Tag": "name=id, type=INT64"
+            "Tag": "name=Id, type=INT64"
         },
         {
-            "Tag": "name=tags, type=LIST",
+            "Tag": "name=Tags, type=LIST",
             "Fields": [
                 {
-                    "Tag": "name=element",
+                    "Tag": "name=Element",
                     "Fields": [
                         {
-                            "Tag": "name=key, type=BYTE_ARRAY, convertedtype=UTF8"
+                            "Tag": "name=Key, type=BYTE_ARRAY, convertedtype=UTF8"
                         },
                         {
-                            "Tag": "name=value, type=BYTE_ARRAY, convertedtype=UTF8"
+                            "Tag": "name=Value, type=BYTE_ARRAY, convertedtype=UTF8"
                         }
                     ]
                 }
             ]
         },
         {
-            "Tag": "name=members, type=LIST",
+            "Tag": "name=Members, type=LIST",
             "Fields": [
                 {
-                    "Tag": "name=element",
+                    "Tag": "name=Element",
                     "Fields": [
                         {
-                            "Tag": "name=objectId, type=INT64"
+                            "Tag": "name=ObjectId, type=INT64"
                         },
                         {
-                            "Tag": "name=memberType, type=INT32"
+                            "Tag": "name=MemberType, type=INT32"
                         },
                         {
-                            "Tag": "name=role, type=BYTE_ARRAY, convertedtype=UTF8"
+                            "Tag": "name=Role, type=BYTE_ARRAY, convertedtype=UTF8"
                         },
                         {
-                            "Tag": "name=orientation, type=INT32"
+                            "Tag": "name=Orientation, type=INT32"
                         }
                     ]
                 }

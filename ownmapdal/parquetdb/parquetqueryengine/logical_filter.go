@@ -1,12 +1,12 @@
 package parquetqueryengine
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/xitongsys/parquet-go/parquet"
-	"github.com/xitongsys/parquet-go/reader"
 )
 
 type LogicalFilterOperator string
@@ -30,7 +30,8 @@ func (lf *LogicalFilter) Validate() errorsx.Error {
 
 func (lf *LogicalFilter) ScanRowGroup(
 	rowGroup *parquet.RowGroup,
-	parquetReader *reader.ParquetReader,
+	parquetReader ParquetReader,
+	queryRunner *queryRunnerType,
 	rowGroupValues rowGroupValuesCollectionType,
 	rootSchemaElementName string,
 ) errorsx.Error {
@@ -38,7 +39,7 @@ func (lf *LogicalFilter) ScanRowGroup(
 	for _, childFilter := range lf.ChildFilters {
 
 		subRowGroupValues := make(rowGroupValuesCollectionType)
-		err := childFilter.ScanRowGroup(rowGroup, parquetReader, subRowGroupValues, rootSchemaElementName)
+		err := childFilter.ScanRowGroup(rowGroup, parquetReader, queryRunner, subRowGroupValues, rootSchemaElementName)
 		if err != nil {
 			return err
 		}
@@ -189,4 +190,13 @@ func (lf *LogicalFilter) ShouldFilterItemIn(fieldName string, value Operand) (Sh
 	default:
 		return 0, errorsx.Errorf("unrecognised operator: %q", lf.Operator)
 	}
+}
+
+func (lf *LogicalFilter) String() string {
+	var s []string
+	for _, childFilter := range lf.ChildFilters {
+		s = append(s, fmt.Sprintf("(%s)", childFilter))
+	}
+
+	return strings.Join(s, fmt.Sprintf(" %s ", lf.Operator))
 }
