@@ -39,3 +39,8 @@ explain analyze select id, unnest(tags)['key'] from 'nodes.parquet' where tags i
 
 go tool pprof --web ownmap-app /path/to/profile/cpu.pprof > profile_out.html
 
+### TODO
+
+- [ ] https://github.com/adjust/parquet_fdw/
+- [ ] https://github.com/citusdata/cstore_fdw
+- [ ] https://github.com/cyclosm/cyclosm-cartocss-style
