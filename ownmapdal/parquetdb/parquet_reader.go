@@ -128,10 +128,10 @@ func (ds *ParquetDatasource) GetInBounds(ctx context.Context, bounds osm.Bounds,
 	}
 
 	query := parquetqueryengine.Query{
-		Select: []string{"Id", "Lat", "Lon"}, //"Tags"},
+		Select: []string{"Id", "Lat", "Lon", "Tags"},
 		Where: &parquetqueryengine.LogicalFilter{
 			Operator:     parquetqueryengine.LogicalFilterOperatorAnd,
-			ChildFilters: append(coordinateFilter), //, nodeFilters...),
+			ChildFilters: append(coordinateFilter), //, nodeFilters...), // FIXME
 		},
 	}
 

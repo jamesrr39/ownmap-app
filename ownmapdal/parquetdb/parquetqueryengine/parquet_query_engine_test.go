@@ -32,7 +32,7 @@ func Test_Run(t *testing.T) {
 	require.NoError(t, err)
 
 	query := &Query{
-		Select: []string{"Id", "Lat", "Lon"},
+		Select: []string{"Id", "Lat", "Lon", "Tags"},
 		Where: &LogicalFilter{
 			Operator: LogicalFilterOperatorAnd,
 			ChildFilters: []Filter{
@@ -72,7 +72,7 @@ func Test_Run(t *testing.T) {
 
 const (
 	testFilename       = "testdata.parquet"
-	testFileSHA512Hash = "288491e503aeba5b06b9237c7ed796908a6257cdee762d90f76977b6f87e514fa626f24e6581e3da0301698c08a2830f103c01edaa6fcddeba5d765ff9216991"
+	testFileSHA512Hash = "38e7c6706bf862240fd6d9162414cfbe022c238596c9f32af85e24e73011ad530722015204bbb4d7ef16330e236065d9af925637d5359adaf34b98955162bb7b"
 )
 
 type tagType struct {
@@ -230,10 +230,10 @@ const osmNodesSchema = `
 `
 
 var testNodes = []testNodeType{
-	{ID: 1, Lat: 10, Lon: -10},
-	{ID: 2, Lat: 10.1, Lon: -10.1},
+	{ID: 1, Lat: 10, Lon: -10, Tags: []tagType{{Key: "place", Value: "city"}, {Key: "name", Value: "my city"}}},
+	{ID: 2, Lat: 10.1, Lon: -10.1, Tags: []tagType{{Key: "place", Value: "town"}, {Key: "name", Value: "my town"}}},
 	{ID: 3, Lat: 10.2, Lon: -10.2},
-	{ID: 4, Lat: 10.3, Lon: -10.3},
+	{ID: 4, Lat: 10.3, Lon: -10.3, Tags: []tagType{{Key: "highway", Value: "motorway"}}},
 	{ID: 5, Lat: 10.4, Lon: -10.4},
 	{ID: 6, Lat: 10.5, Lon: -10.5},
 	{ID: 7, Lat: 10.6, Lon: -10.6},
