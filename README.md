@@ -1,6 +1,6 @@
 # ownmap
 
-**Please note, the status of this project is "pre-alpha testing development". This means that interfaces, file formats, APIs can (and will) change on a regular basis without any notice.**
+**Please note, this project is still in the "early days" in terms of development. This means that for the moment, interfaces, file formats, APIs can change without any notice.**
 
 The aim of this project is to be able to provide a 1-file program that can generate "slippy" maps from openstreetmap PBF files. Ideally it should be able to run (at least serving map tiles) on low-end hard, with a Raspberry Pi-level computer being the target (ideally the Raspberry Pi Zero, but that might be a stretch considering how powerful the hardware is).
 
