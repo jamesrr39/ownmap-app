@@ -36,31 +36,10 @@ func XYZToBounds(x, y, zoomLevel int) osm.Bounds {
 	lat_rad = math.Atan(math.Sinh(math.Pi * (1 - 2*float64(y+1)/n)))
 	latitudeMax := lat_rad * 180 / math.Pi
 
-	// todo seems like lat min/max is muddled
 	return osm.Bounds{
-		// MinLat: latitudeMin,
-		// MaxLat: latitudeMax,
 		MinLat: latitudeMax,
 		MaxLat: latitudeMin,
 		MinLon: longitudeMin,
 		MaxLon: longitudeMax,
 	}
 }
-
-// func XYZToBounds(x, y, zoomLevel int) osm.Bounds {
-// n := math.Pow(2, float64(zoomLevel))
-// longitudeMin := float64(x)/n*360 - 180
-// lat_rad := math.Atan(math.Sinh(math.Pi * (1 - 2*float64(y)/n)))
-// latitudeMin := lat_rad * 180 / math.Pi
-
-// longitudeMax := float64(x+1)/n*360 - 180
-// lat_rad = math.Atan(math.Sinh(math.Pi * (1 - 2*float64(y+1)/n)))
-// latitudeMax := lat_rad * 180 / math.Pi
-
-// return osm.Bounds{
-// 	MinLat: latitudeMin,
-// 	MaxLat: latitudeMax,
-// 	MinLon: longitudeMin,
-// 	MaxLon: longitudeMax,
-// }
-// }
