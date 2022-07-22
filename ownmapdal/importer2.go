@@ -1,6 +1,8 @@
 package ownmapdal
 
 import (
+	"time"
+
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/logpkg"
@@ -18,20 +20,21 @@ type WayBatch struct {
 }
 
 type RelationsBatch struct {
-	objects              []*ownmap.OSMRelation
-	requiredNodesMap     map[int64]*ownmap.OSMNode
-	requiredWaysMap      map[int64]*ownmap.OSMWay
-	requiredRelationsMap map[int64]*ownmap.OSMRelation
-	allRelationsMap      map[int64]*ownmap.OSMRelation
+	objects          []*ownmap.OSMRelation
+	requiredNodesMap map[int64]*ownmap.OSMNode
+	requiredWaysMap  map[int64]*ownmap.OSMWay
+	allRelationsMap  map[int64]*ownmap.OSMRelation
 }
 
 type Importer2Opts struct {
-	BatchSize int
+	BatchSize          int
+	BatchSleepDuration time.Duration
 }
 
 func DefaultImporter2Opts() Importer2Opts {
 	return Importer2Opts{
-		BatchSize: 8192,
+		BatchSize:          8192,
+		BatchSleepDuration: time.Second / 2,
 	}
 }
 
@@ -104,6 +107,9 @@ func Import2(
 			logger.Error("error scanning: %s\nStack trace:\n%s\n", err.Error(), err.Stack())
 			return nil, errorsx.Wrap(err)
 		}
+
+		logger.Info("sleeping at the end of the batch for %s to allow computer time to perform other tasks", importer.opts.BatchSleepDuration)
+		time.Sleep(importer.opts.BatchSleepDuration)
 	}
 
 	dataSourceConn, err := finalStorage.Commit()
@@ -126,12 +132,17 @@ func (importer *Importer2) ScanBatch() errorsx.Error {
 
 	var batchType osm.Type
 	var nodeBatch NodeBatch
-	var wayBatch WayBatch
-	var relationBatch RelationsBatch
+	wayBatch := WayBatch{
+		requiredNodesMap: make(map[int64]*ownmap.OSMNode),
+	}
+	relationBatch := RelationsBatch{
+		requiredNodesMap: make(map[int64]*ownmap.OSMNode),
+		requiredWaysMap:  make(map[int64]*ownmap.OSMWay),
+		allRelationsMap:  make(map[int64]*ownmap.OSMRelation),
+	}
 
 	for i := 0; i < importer.opts.BatchSize; i++ {
 		next := importer.pbfReader.Scan()
-		println("scan next?", next)
 		if !next {
 			break
 		}
@@ -173,7 +184,7 @@ func (importer *Importer2) ScanBatch() errorsx.Error {
 				case osm.TypeWay:
 					relationBatch.requiredWaysMap[member.Ref] = nil
 				case osm.TypeRelation:
-					relationBatch.requiredRelationsMap[member.Ref] = nil
+					relationBatch.allRelationsMap[member.Ref] = nil
 					panic("not implemented: rescan relations?")
 				default:
 					return errorsx.Errorf("not implemented member type: %v. Relation ID: %v", member.Type, obj.ID)
@@ -269,7 +280,6 @@ func addMemberRelationsToBatch(relation *ownmap.OSMRelation, relationBatch Relat
 		}
 
 		memberRelation := relationBatch.allRelationsMap[member.ObjectID]
-		relationBatch.requiredRelationsMap[member.ObjectID] = memberRelation
 		addMemberRelationsToBatch(memberRelation, relationBatch)
 	}
 }

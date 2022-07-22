@@ -86,14 +86,17 @@ run_dev_import:
 		--profile \
 		--keep-work-dir
 
+PARQUET_FILES_DIR=data/data_files/parquet_files
+
 # OSM_PBF_IMPORT_FILEPATH=data/sample-flie.osm.pbf make run_dev_import_parquet
 run_dev_import_parquet:
 	mkdir -p ${DEV_IMPORT_TMP_DIR}
-	mkdir -p data/data_files/parquet_files
+	mkdir -p ${PARQUET_FILES_DIR}
+	rm -rf ${PARQUET_FILES_DIR}/*
 	go build -o ${DEV_IMPORT_TMP_DIR}/ownmap-app cmd/ownmap-app-main.go
 	${DEV_IMPORT_TMP_DIR}/ownmap-app \
 		import \
-		parquet://data/data_files/parquet_files \
+		parquet://${PARQUET_FILES_DIR} \
 		${OSM_PBF_IMPORT_FILEPATH} \
 		--tmp-dir ${DEV_IMPORT_TMP_DIR} \
 		--profile \

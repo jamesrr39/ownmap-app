@@ -21,7 +21,8 @@ require (
 	github.com/lib/pq v1.10.4
 	github.com/llgcode/draw2d v0.0.0-20200930101115-bfaf5d914d1e
 	github.com/mattn/go-sqlite3 v1.14.9 // indirect
-	github.com/paulmach/osm v0.2.0
+	github.com/paulmach/orb v0.7.1 // indirect
+	github.com/paulmach/osm v0.5.0
 	github.com/pierrec/lz4/v4 v4.1.11 // indirect
 	github.com/pkg/profile v1.5.0
 	github.com/spf13/afero v1.6.0 // indirect
@@ -33,6 +34,7 @@ require (
 	golang.org/x/net v0.0.0-20211118161319-6a13c67c3ce4 // indirect
 	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9 // indirect
 	golang.org/x/text v0.3.7 // indirect
+	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )

@@ -1,5 +1,4 @@
-protoscan [![CI](https://github.com/paulmach/protoscan/workflows/CI/badge.svg)](https://github.com/paulmach/protoscan/actions?query=workflow%3ACI+event%3Apush) [![codecov](https://codecov.io/gh/paulmach/protoscan/branch/master/graph/badge.svg?token=NuuTjLVpKW)](https://codecov.io/gh/paulmach/protoscan) [![Go Report Card](http://goreportcard.com/badge/github.com/paulmach/protoscan)](https://goreportcard.com/report/github.com/paulmach/protoscan) [![Godoc Reference](https://godoc.org/github.com/paulmach/protoscan?status.svg)](https://godoc.org/github.com/paulmach/protoscan)
-=========
+# protoscan [![CI](https://github.com/paulmach/protoscan/workflows/CI/badge.svg)](https://github.com/paulmach/protoscan/actions?query=workflow%3ACI+event%3Apush) [![codecov](https://codecov.io/gh/paulmach/protoscan/branch/master/graph/badge.svg?token=NuuTjLVpKW)](https://codecov.io/gh/paulmach/protoscan) [![Go Report Card](http://goreportcard.com/badge/github.com/paulmach/protoscan)](https://goreportcard.com/report/github.com/paulmach/protoscan) [![Godoc Reference](https://godoc.org/github.com/paulmach/protoscan?status.svg)](https://godoc.org/github.com/paulmach/protoscan)
 
 Package `protoscan` is a low-level reader for
 [protocol buffers](https://developers.google.com/protocol-buffers) encoded data
@@ -13,12 +12,12 @@ This library can help decoding performance in two ways:
 2. decoding directly into specific types or perform other transformations, the extra state
    can be skipped by manually decoding into the types directly.
 
-Please be aware that to decode entire message it is still faster to use
-[gogoprotobuf](https://github.com/gogo/protobuf). After must testing I think this is due
+Please be aware that to decode an entire message it is still faster to use
+[gogoprotobuf](https://github.com/gogo/protobuf). After much testing I think this is due
 to the generated code inlining almost all code to eliminate the function call overhead.
 
 **Warning:** Writing code with this library is like writing the auto-generated protobuf
-decoder and is very time consuming. It should only be used for specific use cases and
+decoder and is very time-consuming. It should only be used for specific use cases and
 for stable protobuf definitions.
 
 ## Usage
@@ -26,7 +25,7 @@ for stable protobuf definitions.
 First, the encoded protobuf data is used to initialize a new Message. Then you
 iterate over the fields, reading or skipping them.
 
-``` go
+```go
 msg := protoscan.New(encodedData)
 for msg.Next() {
     switch msg.FieldNumber() {
@@ -77,10 +76,10 @@ There is an accessor for each one the protobuf
 [scalar value types](https://developers.google.com/protocol-buffers/docs/proto#scalar).
 
 For repeated fields there is a corresponding set of functions like
-`RepeatedInt64(buf []int64) ([]int64, error)`. Repeated fields may or may not be packed so you
+`RepeatedInt64(buf []int64) ([]int64, error)`. Repeated fields may or may not be packed, so you
 should pass in a pre-created buffer variable when calling. For example
 
-``` go
+```go
 var ids []int64
 
 msg := protoscan.New(encodedData)
@@ -101,17 +100,18 @@ if msg.Err() != nil {
     // handle
 }
 ```
+
 If the ids are 'packed', `RepeatedInt64()` will be called once. If the ids are simply repeated
 `RepeatedInt64()` will be called N times, but the resulting array of ids will be the same.
 
-For more control over the values in a packed, repeated field use a Iterator. See above for an example.
+For more control over the values in a packed, repeated field use an Iterator. See above for an example.
 
 ### Decoding Embedded Messages
 
-Embedded messages can be handled recursively or the raw data can be returned and decoded
+Embedded messages can be handled recursively, or the raw data can be returned and decoded
 using a standard/auto-generated `proto.Unmarshal` function.
 
-``` go
+```go
 msg := protoscan.New(encodedData)
 for msg.Next() {
     fn := msg.FieldNumber()
@@ -151,7 +151,7 @@ For Errors can occure for two reason:
 Starting with a customer message with embedded orders and items and you only want
 to count the number of items in open orders.
 
-``` protobuf
+```protobuf
 message Customer {
   required int64 id = 1;
   optional string username = 2;
@@ -173,7 +173,7 @@ message Item {
 
 Sample Code:
 
-``` go
+```go
 openCount := 0
 itemCount := 0
 favoritesCount := 0
@@ -247,7 +247,39 @@ fmt.Printf("Favorites:   %d\n", favoritesCount)
 // Favorites:   8
 ```
 
+## Wire Type Start Group and End Group
+
+Groups are an old protobuf wire type that has been deprecated for a long time.
+They function as parentheses but with no "data length" information
+so their content can not be effectively skipped.
+Just the start and end group indicators can be read and skipped like any other field.
+This would cause the data to be read without the parentheses, whatever that may mean in practice.
+To get the raw protobuf data inside a group try something like:
+
+```go
+var (
+	groupFieldNum = 123
+	groupData []byte
+)
+
+msg := New(data)
+for msg.Next() {
+	if msg.FieldNumber() == groupFieldNum && msg.WireType() == WireTypeStartGroup {
+		start, end := msg.Index, msg.Index
+		for msg.Next() {
+			msg.Skip()
+			if msg.FieldNumber() == groupFieldNum && msg.WireType() == WireTypeEndGroup {
+				break
+			}
+			end = msg.Index
+		}
+		// groupData would be the raw protobuf encoded bytes of the fields in the group.
+		groupData = msg.Data[start:end]
+	}
+}
+```
+
 ## Similar libraries in other languages
 
-* [protozero](https://github.com/mapbox/protozero) - C++, the inspiration for this library
-* [pbf](https://github.com/mapbox/pbf) - javascript
+-   [protozero](https://github.com/mapbox/protozero) - C++, the inspiration for this library
+-   [pbf](https://github.com/mapbox/pbf) - javascript
