@@ -1,5 +1,11 @@
 .DEFAULT_GOAL := help
 
+PG_CONTAINER_NAME=ownmap-app-postgresql-1
+DB_NAME=ownmap
+DROP_DATABASE_DDL=SELECT 'DROP DATABASE ${DB_NAME}' WHERE EXISTS (SELECT FROM pg_database WHERE datname = '${DB_NAME}')\gexec
+CREATE_DATABASE_DDL=CREATE DATABASE ${DB_NAME}
+
+
 .PHONY: help
 help:
 	echo "no help available"
@@ -80,6 +86,7 @@ run_dev_import:
 		--profile \
 		--keep-work-dir
 
+# OSM_PBF_IMPORT_FILEPATH=data/sample-flie.osm.pbf make run_dev_import_parquet
 run_dev_import_parquet:
 	mkdir -p ${DEV_IMPORT_TMP_DIR}
 	mkdir -p data/data_files/parquet_files
@@ -87,20 +94,25 @@ run_dev_import_parquet:
 	${DEV_IMPORT_TMP_DIR}/ownmap-app \
 		import \
 		parquet://data/data_files/parquet_files \
-		data/sample-pbf-file.pbf \
+		${OSM_PBF_IMPORT_FILEPATH} \
 		--tmp-dir ${DEV_IMPORT_TMP_DIR} \
 		--profile \
-		--keep-work-dir \
 		--parquet-row-group-size 1048576
+
+
+.PHONY: psql_restore_db
+psql_restore_db:
+	docker exec -it ${PG_CONTAINER_NAME} sh -c "echo \"${DROP_DATABASE_DDL}\" | psql -U docker"
+	docker exec -it ${PG_CONTAINER_NAME} sh -c "echo \"${CREATE_DATABASE_DDL}\" | psql -U docker"
 
 
 .PHONY: run_dev_import_postgres
 run_dev_import_postgres:
-	# docker exec -it ownmapapp_postgresql_1 psql -U docker -c 'DROP DATABASE IF EXISTS ownmap; CREATE DATABASE ownmap;'
+	printf '\set AUTOCOMMIT on\nDROP DATABASE IF EXISTS ${DB_NAME}; CREATE DATABASE ${DB_NAME}; ' |  docker exec ${PG_CONTAINER_NAME} psql -U docker
 	go build -o ${DEV_IMPORT_TMP_DIR}/ownmap-app cmd/ownmap-app-main.go
 	${DEV_IMPORT_TMP_DIR}/ownmap-app \
 		import \
-		postgresql://docker:docker@localhost:5432/ownmap?sslmode=disable \
+		postgresql://docker:docker@localhost:5432/${DB_NAME}?sslmode=disable \
 		data/sample-pbf-file.pbf \
 		--tmp-dir ${DEV_IMPORT_TMP_DIR} \
 		--profile
@@ -116,3 +128,7 @@ run_dev_import_big:
 		--tmp-dir ${DEV_IMPORT_BIG_TMP_DIR} \
 		--profile \
 		--keep-work-dir
+
+.PHONY: db_psql
+db_psql:
+	docker exec -it ${PG_CONTAINER_NAME} psql -U docker ${DB_NAME}

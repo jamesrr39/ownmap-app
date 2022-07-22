@@ -56,7 +56,7 @@ type Importer struct {
 	ReplicationTime            time.Time
 }
 
-func NewImporter(dirPath string, pbfHeader *osmpbf.Header, rowGroupSize int64) (*Importer, errorsx.Error) {
+func NewFinalStorage(dirPath string, pbfHeader *osmpbf.Header, rowGroupSize int64) (*Importer, errorsx.Error) {
 	var writerFiles []*parquetwriter.JSONWriter
 	for _, fileNameAndSchema := range getFileNamesAndSchemas() {
 		f, err := local.NewLocalFileWriter(filepath.Join(dirPath, fileNameAndSchema.Name))
@@ -150,6 +150,35 @@ func (i *Importer) ImportRelation(obj *ownmap.OSMRelation) errorsx.Error {
 
 	return nil
 }
+
+func (i *Importer) ImportNodes(objs []*ownmap.OSMNode) errorsx.Error {
+	for _, obj := range objs {
+		err := i.ImportNode(obj)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+	}
+	return nil
+}
+func (i *Importer) ImportWays(objs []*ownmap.OSMWay) errorsx.Error {
+	for _, obj := range objs {
+		err := i.ImportWay(obj)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+	}
+	return nil
+}
+func (i *Importer) ImportRelations(objs []*ownmap.OSMRelation) errorsx.Error {
+	for _, obj := range objs {
+		err := i.ImportRelation(obj)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+	}
+	return nil
+}
+
 func (i *Importer) Commit() (ownmapdal.DataSourceConn, errorsx.Error) {
 	err := i.nodesParquetWriterFile.WriteStop()
 	if err != nil {
@@ -182,5 +211,5 @@ func (i *Importer) Commit() (ownmapdal.DataSourceConn, errorsx.Error) {
 	return NewParquetDatasource(i.dirPath)
 }
 func (i *Importer) Rollback() errorsx.Error {
-	panic("unhandled: Rollback")
+	return errorsx.Errorf("unhandled: Rollback")
 }

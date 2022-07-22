@@ -86,7 +86,7 @@ type Importer struct {
 	options                  ImportOptions
 }
 
-func NewImporter(logger *logpkg.Logger, fs gofs.Fs, workDir, outFilePath string, ownmapDBFileHandlerLimit uint, pbfHeader *osmpbf.Header, options ImportOptions) (*Importer, errorsx.Error) {
+func NewFinalStorage(logger *logpkg.Logger, fs gofs.Fs, workDir, outFilePath string, ownmapDBFileHandlerLimit uint, pbfHeader *osmpbf.Header, options ImportOptions) (*Importer, errorsx.Error) {
 	collections, err := makeCollections(fs, workDir)
 	if err != nil {
 		return nil, errorsx.Wrap(err)

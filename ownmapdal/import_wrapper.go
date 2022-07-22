@@ -8,6 +8,8 @@ import (
 	"github.com/paulmach/osm"
 )
 
+const MaxRescans = 10000
+
 type Importer interface {
 	GetNodeByID(id int64) (*ownmap.OSMNode, error)
 	GetWayByID(id int64) (*ownmap.OSMWay, error)
@@ -294,7 +296,6 @@ func Import(
 
 	logger.Info("First scan finished. Now re-scanning unscanned relations.")
 
-	const MaxRescans = 10000
 	for i := 0; i < MaxRescans; i++ {
 		logger.Info("running rescan %d", i)
 		err := pbfReader.Reset()

@@ -22,7 +22,6 @@ import (
 	"github.com/jamesrr39/goutil/open"
 	"github.com/jamesrr39/goutil/userextra"
 	"github.com/jamesrr39/ownmap-app/fonts"
-	"github.com/jamesrr39/ownmap-app/ownmap"
 	"github.com/jamesrr39/ownmap-app/ownmapdal"
 	"github.com/jamesrr39/ownmap-app/ownmapdal/ownmapdb"
 	"github.com/jamesrr39/ownmap-app/ownmapdal/ownmapsqldb/ownmappostgresql"
@@ -357,9 +356,9 @@ func setupImport() {
 	dbFileConnString := cmd.Arg("db-file", dbFileHelp).Required().String()
 	filePath := cmd.Arg("file", "PBF file to import").Required().String()
 	tmpDirFlag := cmd.Flag("tmp-dir", "temp dir to use, if applicable for this DB file type (note: recommended to be in the same partition as the resulting outputted file").String()
-	boundsStr := cmd.Flag("bounds", "set the bounds that the importer should import within. [W,N,E,S] Example: -1,1,1,-1").Default("").String()
-	keepWorkDirFlag := cmd.Flag("keep-work-dir", "keep the working directory used during the import (for debugging)").Bool()
-	ownmapDBFileHandlerLimit := cmd.Flag("ownmapdb-file-handler-limit", "maximum amount of file handlers per ownmap DB").Default(fmt.Sprintf("%d", DEFAULT_MAPMAKER_DB_FILE_HANDLER_LIMIT)).Uint()
+	// boundsStr := cmd.Flag("bounds", "set the bounds that the importer should import within. [W,N,E,S] Example: -1,1,1,-1").Default("").String()
+	// keepWorkDirFlag := cmd.Flag("keep-work-dir", "keep the working directory used during the import (for debugging)").Bool()
+	// ownmapDBFileHandlerLimit := cmd.Flag("ownmapdb-file-handler-limit", "maximum amount of file handlers per ownmap DB").Default(fmt.Sprintf("%d", DEFAULT_MAPMAKER_DB_FILE_HANDLER_LIMIT)).Uint()
 	shouldProfile := cmd.Flag("profile", "profile the import performance").Bool()
 	parquetRowGroupSize := cmd.Flag("parquet-row-group-size", `(applies only to imports in the parquet format) Amount of rows in one parquet "group"`).Default(fmt.Sprintf("%d", DEFAULT_PARQUET_ROW_GROUP_SIZE)).Int64()
 	cmd.Action(func(ctx *kingpin.ParseContext) (err error) {
@@ -385,20 +384,28 @@ func setupImport() {
 			defer profile.Start(profile.ProfilePath(workDirPath), profile.CPUProfile).Stop()
 		}
 
-		bounds := ownmap.GetWholeWorldBounds()
-		boundsStrs := strings.Split(*boundsStr, ",")
-		bounds, err = boundsStrToOSMBounds(boundsStrs)
-		if err != nil {
-			return err
-		}
+		// bounds := ownmap.GetWholeWorldBounds()
+		// boundsStrs := strings.Split(*boundsStr, ",")
+		// bounds, err = boundsStrToOSMBounds(boundsStrs)
+		// if err != nil {
+		// 	return err
+		// }
 
 		startTime := time.Now()
+
+		logger.Info("filePath: %s", *filePath)
 
 		file, err := fs.Open(*filePath)
 		if err != nil {
 			return errorsx.Wrap(err)
 		}
 		defer file.Close()
+
+		auxFile, err := fs.Open(*filePath)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+		defer auxFile.Close()
 
 		fileInfo, err := file.Stat()
 		if err != nil {
@@ -410,6 +417,12 @@ func setupImport() {
 			return errorsx.Wrap(err)
 		}
 		defer pbfReader.Close()
+
+		auxillaryPBFReader, err := ownmapdal.NewDefaultPBFReader(auxFile)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+		defer auxillaryPBFReader.Close()
 
 		pbfHeader, err := pbfReader.Header()
 		if err != nil {
@@ -425,26 +438,26 @@ func setupImport() {
 			return errorsx.Wrap(err, "db file path", *dbFileConnString)
 		}
 
-		var importer ownmapdal.Importer
+		var finalStorage ownmapdal.FinalStorage
 		switch ownmapdal.DBFileType(dbConnConfig.Type) {
-		case ownmapdal.DBFileTypeMapmakerDB:
-			options := ownmapdb.ImportOptions{
-				KeepWorkDir: *keepWorkDirFlag,
-			}
+		// case ownmapdal.DBFileTypeMapmakerDB:
+		// 	options := ownmapdb.ImportOptions{
+		// 		KeepWorkDir: *keepWorkDirFlag,
+		// 	}
 
-			importer, err = ownmapdb.NewImporter(logger, fs, workDirPath, dbConnConfig.ConnectionPath, *ownmapDBFileHandlerLimit, pbfHeader, options)
-			if err != nil {
-				return errorsx.Wrap(err)
-			}
+		// 	finalStorage, err = ownmapdb.NewFinalStorage(logger, fs, workDirPath, dbConnConfig.ConnectionPath, *ownmapDBFileHandlerLimit, pbfHeader, options)
+		// 	if err != nil {
+		// 		return errorsx.Wrap(err)
+		// 	}
 
-		case ownmapdal.DBFileTypePostgresql:
-			importer, err = ownmappostgresql.NewImporter(dbConnConfig.ConnectionPath, pbfHeader)
-			if err != nil {
-				return errorsx.Wrap(err)
-			}
+		// case ownmapdal.DBFileTypePostgresql:
+		// 	finalStorage, err = ownmappostgresql.NewFinalStorage(dbConnConfig.ConnectionPath, pbfHeader)
+		// 	if err != nil {
+		// 		return errorsx.Wrap(err)
+		// 	}
 
 		case ownmapdal.DBFileTypeParquet:
-			importer, err = parquetdb.NewImporter(dbConnConfig.ConnectionPath, pbfHeader, *parquetRowGroupSize)
+			finalStorage, err = parquetdb.NewFinalStorage(dbConnConfig.ConnectionPath, pbfHeader, *parquetRowGroupSize)
 			if err != nil {
 				return errorsx.Wrap(err)
 			}
@@ -453,10 +466,15 @@ func setupImport() {
 			return errorsx.Errorf("unknown DB file type: %q\n", dbConnConfig.Type)
 		}
 
-		_, err = ownmapdal.Import(logger, pbfReader, fs, importer, bounds)
+		_, err = ownmapdal.Import2(logger, pbfReader, auxillaryPBFReader, fs, finalStorage)
 		if err != nil {
 			return errorsx.Wrap(err)
 		}
+
+		// _, err = ownmapdal.Import(logger, pbfReader, fs, finalStorage, bounds)
+		// if err != nil {
+		// 	return errorsx.Wrap(err)
+		// }
 
 		logger.Info("import finished in %s", time.Since(startTime))
 

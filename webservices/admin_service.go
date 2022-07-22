@@ -102,7 +102,7 @@ func (as *AdminService) handlePostRawDataFile(w http.ResponseWriter, r *http.Req
 				return nil, errorsx.Wrap(err)
 			}
 
-			importer, err := ownmapdb.NewImporter(
+			importer, err := ownmapdb.NewFinalStorage(
 				as.logger,
 				fs,
 				workDirPath,
