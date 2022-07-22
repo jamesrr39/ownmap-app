@@ -33,7 +33,7 @@ type Importer2Opts struct {
 
 func DefaultImporter2Opts() Importer2Opts {
 	return Importer2Opts{
-		BatchSize:          8192,
+		BatchSize:          1024 * 32,
 		BatchSleepDuration: time.Second / 2,
 	}
 }
@@ -102,7 +102,7 @@ func Import2(
 
 	for i := 0; i < MaxBatches; i++ {
 		logger.Info("scanning batch %d", i)
-		err := importer.ScanBatch()
+		reachedEnd, err := importer.ScanBatch()
 		if err != nil {
 			logger.Error("error scanning: %s\nStack trace:\n%s\n", err.Error(), err.Stack())
 			return nil, errorsx.Wrap(err)
@@ -110,6 +110,10 @@ func Import2(
 
 		logger.Info("sleeping at the end of the batch for %s to allow computer time to perform other tasks", importer.opts.BatchSleepDuration)
 		time.Sleep(importer.opts.BatchSleepDuration)
+		if reachedEnd {
+			logger.Info("reached the end of scanning!")
+			break
+		}
 	}
 
 	dataSourceConn, err := finalStorage.Commit()
@@ -123,11 +127,12 @@ func Import2(
 
 }
 
-func (importer *Importer2) ScanBatch() errorsx.Error {
+// (finished, error)
+func (importer *Importer2) ScanBatch() (bool, errorsx.Error) {
 	var err error
 	err = importer.auxillaryPbfReader.Reset()
 	if err != nil {
-		return errorsx.Wrap(err)
+		return false, errorsx.Wrap(err)
 	}
 
 	var batchType osm.Type
@@ -141,9 +146,12 @@ func (importer *Importer2) ScanBatch() errorsx.Error {
 		allRelationsMap:  make(map[int64]*ownmap.OSMRelation),
 	}
 
+	var reachedEnd bool
+
 	for i := 0; i < importer.opts.BatchSize; i++ {
 		next := importer.pbfReader.Scan()
 		if !next {
+			reachedEnd = true
 			break
 		}
 
@@ -171,11 +179,12 @@ func (importer *Importer2) ScanBatch() errorsx.Error {
 		case *osm.Relation:
 			relation, err := ownmap.NewMapmakerRelationFromOSMRelation(obj)
 			if err != nil {
-				return errorsx.Wrap(err)
+				return false, errorsx.Wrap(err)
 			}
 
 			// for now, add all relations to the final storage
 			relationBatch.allRelationsMap[relation.ID] = relation
+			relationBatch.objects = append(relationBatch.objects, relation)
 
 			for _, member := range obj.Members {
 				switch member.Type {
@@ -184,49 +193,64 @@ func (importer *Importer2) ScanBatch() errorsx.Error {
 				case osm.TypeWay:
 					relationBatch.requiredWaysMap[member.Ref] = nil
 				case osm.TypeRelation:
-					relationBatch.allRelationsMap[member.Ref] = nil
-					panic("not implemented: rescan relations?")
+					// do nothing, all relations are added anyway
 				default:
-					return errorsx.Errorf("not implemented member type: %v. Relation ID: %v", member.Type, obj.ID)
+					return false, errorsx.Errorf("not implemented member type: %v. Relation ID: %v", member.Type, obj.ID)
 				}
 			}
-			relationBatch.objects = append(relationBatch.objects, relation)
 		default:
-			return errorsx.Errorf("unknown object type: %v. ID: %v", obj.ObjectID().Type(), obj.ObjectID().Ref())
+			return false, errorsx.Errorf("unknown object type: %v. ID: %v", obj.ObjectID().Type(), obj.ObjectID().Ref())
 		}
 	}
 
 	err = importer.pbfReader.Err()
 	if err != nil {
-		return errorsx.Wrap(err)
+		return false, errorsx.Wrap(err)
+	}
+
+	if batchType == "" {
+		// no objects in this batch. Skip importing it.
+		return reachedEnd, nil
 	}
 
 	// all objects for this batch have been scanned. Now scan any dependencies if necessary, and if not, import
 	switch batchType {
 	case osm.TypeNode:
-		return importer.finalStorage.ImportNodes(nodeBatch.objects)
+		err := importer.finalStorage.ImportNodes(nodeBatch.objects)
+		if err != nil {
+			return false, err
+		}
 	case osm.TypeWay:
 		err := scanWaypoints(importer.auxillaryPbfReader, wayBatch)
 		if err != nil {
-			return err
+			return false, err
 		}
 
-		return importer.finalStorage.ImportWays(wayBatch.objects)
+		err = importer.finalStorage.ImportWays(wayBatch.objects)
+		if err != nil {
+			return false, err
+		}
 	case osm.TypeRelation:
 		// err := scanRelations(importer.auxillaryPbfReader, relationBatch)
 		// if err != nil {
 		// 	return err
 		// }
 
-		return importer.finalStorage.ImportRelations(relationBatch.objects)
+		err := importer.finalStorage.ImportRelations(relationBatch.objects)
+		if err != nil {
+			return false, err
+		}
 	default:
-		return errorsx.Errorf("unknown batch type: %v", batchType)
+		return false, errorsx.Errorf("unknown batch type: %v", batchType)
 	}
+
+	return reachedEnd, nil
 }
 
 func scanWaypoints(auxillaryPbfReader PBFReader, wayBatch WayBatch) errorsx.Error {
 	var itemsScanned int
 	totalToScan := len(wayBatch.requiredNodesMap)
+	var nodesScannedCount, nodesInRequiredCount int
 
 	for auxillaryPbfReader.Scan() {
 		object := auxillaryPbfReader.Object()
@@ -236,14 +260,19 @@ func scanWaypoints(auxillaryPbfReader PBFReader, wayBatch WayBatch) errorsx.Erro
 			continue
 		}
 
-		_, ok := wayBatch.requiredNodesMap[int64(object.ObjectID())]
+		nodesScannedCount++
+
+		_, ok := wayBatch.requiredNodesMap[object.ObjectID().Ref()]
 		if !ok {
 			// not needed
 			continue
 		}
 
+		nodesInRequiredCount++
+
 		obj := object.(*osm.Node)
 		wayBatch.requiredNodesMap[int64(obj.ID)] = ownmap.NewMapmakerNodeFromOSMRelation(obj)
+		itemsScanned++
 	}
 
 	err := auxillaryPbfReader.Err()
@@ -252,7 +281,7 @@ func scanWaypoints(auxillaryPbfReader PBFReader, wayBatch WayBatch) errorsx.Erro
 	}
 
 	if itemsScanned != totalToScan {
-		return errorsx.Errorf("items scanned (%d) not equal to total to scan (%d)", itemsScanned, totalToScan)
+		return errorsx.Errorf("items scanned (%d) not equal to total to scan (%d). Nodes scanned count:%d, nodesInRequiredCount:%d", itemsScanned, totalToScan, nodesScannedCount, nodesInRequiredCount)
 	}
 
 	// now go through each way, set required nodes
@@ -303,7 +332,7 @@ func scanRelations(auxillaryPbfReader PBFReader, relationBatch RelationsBatch) e
 			continue
 		}
 
-		_, ok := relationBatch.requiredNodesMap[int64(object.ObjectID())]
+		_, ok := relationBatch.requiredNodesMap[object.ObjectID().Ref()]
 		if !ok {
 			// not needed
 			continue

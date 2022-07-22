@@ -4,6 +4,7 @@ PG_CONTAINER_NAME=ownmap-app-postgresql-1
 DB_NAME=ownmap
 DROP_DATABASE_DDL=SELECT 'DROP DATABASE ${DB_NAME}' WHERE EXISTS (SELECT FROM pg_database WHERE datname = '${DB_NAME}')\gexec
 CREATE_DATABASE_DDL=CREATE DATABASE ${DB_NAME}
+PARQUET_FILES_DIR=data/data_files/parquet_files
 
 
 .PHONY: help
@@ -86,8 +87,7 @@ run_dev_import:
 		--profile \
 		--keep-work-dir
 
-PARQUET_FILES_DIR=data/data_files/parquet_files
-
+# usage:
 # OSM_PBF_IMPORT_FILEPATH=data/sample-flie.osm.pbf make run_dev_import_parquet
 run_dev_import_parquet:
 	mkdir -p ${DEV_IMPORT_TMP_DIR}
