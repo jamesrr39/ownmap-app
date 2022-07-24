@@ -28,12 +28,26 @@ DuckDB is a great tool to debug your parquet files with.
 Install it, and then change directory in the terminal to the directory where you have the parquet files. Then run `duckdb` and try out these example queries:
 
 ```
-select unnest(tags)['key'] from '*.parquet' where tags is not null limit 10;
+-- Look at how duckdb views the files
 
-select unnest(tags)['key'], unnest(tags)['value'], id, lat, lon from 'nodes.parquet' where lat > 12.34 limit 100;
+SELECT * FROM parquet_schema('relations.parquet');
+SELECT * FROM parquet_metadata('relations.parquet');
 
-explain analyze select id, unnest(tags)['key'] from 'nodes.parquet' where tags is not null and lat > 12.34 limit 10;
+-- Try a query with a where clause on latitude. Extract the key and value of the tags.
+
+SELECT UNNEST(tags)['key'], UNNEST(tags)['value'], id, lat, lon FROM 'nodes.parquet' WHERE lat > 12.34 LIMIT 100;
+
+-- See how duckdb queries our parquet files:
+
+EXPLAIN ANALYZE SELECT id, UNNEST(tags)['key'] FROM 'nodes.parquet' WHERE tags IS NOT NULL AND lat > 12.34 LIMIT 10;
+
+-- Use a Common Table Expression (CTE) to query by tag keys and values
+
+WITH unnested AS (SELECT id, UNNEST(tags)['key'] AS key, UNNEST(tags)['value'] AS value FROM 'ways.parquet' WHERE tags IS NOT NULL)
+SELECT * FROM unnested WHERE key = 'highway' AND value IN ('motorway', 'primary');
 ```
+
+The following queries were run with version [v0.4.0 da9ee490d](https://github.com/duckdb/duckdb/releases/tag/v0.4.0) of duckdb. If you have any problems, please try at least this or a later version of duckdb. (0.2.9 for example, will not run all the queries successfully.)
 
 ### Profiling
 
