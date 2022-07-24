@@ -75,6 +75,8 @@ DEV_IMPORT_TMP_DIR := ${DEV_IMPORT_DIR}/tmp
 DEV_IMPORT_BIG_DIR := data/dev_import_big/$(shell date +%Y-%m-%d_%H_%M_%S)
 DEV_IMPORT_BIG_TMP_DIR := data/dev_import_big/$(shell date +%Y-%m-%d_%H_%M_%S)/tmp
 
+# usage:
+# OSM_PBF_IMPORT_FILEPATH=data/sample-flie.osm.pbf make run_dev_import_parquet
 .PHONY: run_dev_import
 run_dev_import:
 	mkdir -p ${DEV_IMPORT_TMP_DIR}
@@ -82,7 +84,7 @@ run_dev_import:
 	${DEV_IMPORT_TMP_DIR}/ownmap-app \
 		import \
 		ownmapdb://data/data_files/sample_database.db \
-		data/sample-pbf-file.pbf \
+		${OSM_PBF_IMPORT_FILEPATH} \
 		--tmp-dir ${DEV_IMPORT_TMP_DIR} \
 		--profile \
 		--keep-work-dir

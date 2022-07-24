@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/httpextra"
+	"github.com/jamesrr39/goutil/humanise"
 	"github.com/jamesrr39/goutil/logpkg"
 	"github.com/jamesrr39/goutil/open"
 	"github.com/jamesrr39/goutil/userextra"
@@ -357,8 +359,8 @@ func setupImport() {
 	filePath := cmd.Arg("file", "PBF file to import").Required().String()
 	tmpDirFlag := cmd.Flag("tmp-dir", "temp dir to use, if applicable for this DB file type (note: recommended to be in the same partition as the resulting outputted file").String()
 	// boundsStr := cmd.Flag("bounds", "set the bounds that the importer should import within. [W,N,E,S] Example: -1,1,1,-1").Default("").String()
-	// keepWorkDirFlag := cmd.Flag("keep-work-dir", "keep the working directory used during the import (for debugging)").Bool()
-	// ownmapDBFileHandlerLimit := cmd.Flag("ownmapdb-file-handler-limit", "maximum amount of file handlers per ownmap DB").Default(fmt.Sprintf("%d", DEFAULT_MAPMAKER_DB_FILE_HANDLER_LIMIT)).Uint()
+	keepWorkDirFlag := cmd.Flag("keep-work-dir", "keep the working directory used during the import (for debugging)").Bool()
+	ownmapDBFileHandlerLimit := cmd.Flag("ownmapdb-file-handler-limit", "maximum amount of file handlers per ownmap DB").Default(fmt.Sprintf("%d", DEFAULT_MAPMAKER_DB_FILE_HANDLER_LIMIT)).Uint()
 	shouldProfile := cmd.Flag("profile", "profile the import performance").Bool()
 	parquetRowGroupSize := cmd.Flag("parquet-row-group-size", `(applies only to imports in the parquet format) Amount of rows in one parquet "group"`).Default(fmt.Sprintf("%d", DEFAULT_PARQUET_ROW_GROUP_SIZE)).Int64()
 	cmd.Action(func(ctx *kingpin.ParseContext) (err error) {
@@ -440,21 +442,22 @@ func setupImport() {
 
 		var finalStorage ownmapdal.FinalStorage
 		switch ownmapdal.DBFileType(dbConnConfig.Type) {
-		// case ownmapdal.DBFileTypeMapmakerDB:
-		// 	options := ownmapdb.ImportOptions{
-		// 		KeepWorkDir: *keepWorkDirFlag,
-		// 	}
+		case ownmapdal.DBFileTypeMapmakerDB:
+			options := ownmapdb.ImportOptions{
+				KeepWorkDir: *keepWorkDirFlag,
+			}
 
-		// 	finalStorage, err = ownmapdb.NewFinalStorage(logger, fs, workDirPath, dbConnConfig.ConnectionPath, *ownmapDBFileHandlerLimit, pbfHeader, options)
-		// 	if err != nil {
-		// 		return errorsx.Wrap(err)
-		// 	}
+			finalStorage, err = ownmapdb.NewFinalStorage(logger, fs, workDirPath, dbConnConfig.ConnectionPath, *ownmapDBFileHandlerLimit, pbfHeader, options)
+			if err != nil {
+				return errorsx.Wrap(err)
+			}
 
-		// case ownmapdal.DBFileTypePostgresql:
-		// 	finalStorage, err = ownmappostgresql.NewFinalStorage(dbConnConfig.ConnectionPath, pbfHeader)
-		// 	if err != nil {
-		// 		return errorsx.Wrap(err)
-		// 	}
+		case ownmapdal.DBFileTypePostgresql:
+			panic("implemention TODO")
+			// finalStorage, err = ownmappostgresql.NewFinalStorage(dbConnConfig.ConnectionPath, pbfHeader)
+			// if err != nil {
+			// 	return errorsx.Wrap(err)
+			// }
 
 		case ownmapdal.DBFileTypeParquet:
 			finalStorage, err = parquetdb.NewFinalStorage(dbConnConfig.ConnectionPath, pbfHeader, *parquetRowGroupSize)
@@ -571,6 +574,7 @@ func createServer(dbConns *ownmapdal.DBConnSet, styleSet *styling.StyleSet, path
 }
 
 func runLogProgress(pbfReader *ownmapdal.DefaultPBFReader, finishedChan chan bool, totalBytes int64) {
+	var memStats runtime.MemStats
 	for {
 		time.Sleep(time.Second * 5)
 		select {
@@ -578,8 +582,15 @@ func runLogProgress(pbfReader *ownmapdal.DefaultPBFReader, finishedChan chan boo
 			log.Println("finished scanning the PBF file. Now committing to storage. This make take several minutes...")
 			return
 		default:
+			runtime.ReadMemStats(&memStats)
 			fullyScannedBytes := pbfReader.FullyScannedBytes()
-			log.Printf("scanned bytes so far: %d/%d (%0.02f%%)\n", fullyScannedBytes, totalBytes, float64(fullyScannedBytes)*100/float64(totalBytes))
+			log.Printf(
+				"scanned bytes so far: %d/%d (%0.02f%%). Memory allocated: %s\n",
+				fullyScannedBytes,
+				totalBytes,
+				float64(fullyScannedBytes)*100/float64(totalBytes),
+				humanise.HumaniseBytes(int64(memStats.Alloc)),
+			)
 		}
 	}
 }

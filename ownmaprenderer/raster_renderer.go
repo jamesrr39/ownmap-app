@@ -88,9 +88,15 @@ func (rr *RasterRenderer) RenderRaster(ctx context.Context, dbConnSet *ownmapdal
 	wayMap := make(ownmapdal.TagWayMap)
 	relationMap := make(ownmapdal.TagRelationMap)
 
-	nodeMapChan := make(chan ownmapdal.TagNodeMap)
-	wayMapChan := make(chan ownmapdal.TagWayMap)
-	relationMapChan := make(chan ownmapdal.TagRelationMap)
+	// nodeMapChan := make(chan ownmapdal.TagNodeMap)
+	// wayMapChan := make(chan ownmapdal.TagWayMap)
+	// relationMapChan := make(chan ownmapdal.TagRelationMap)
+	type DataObject struct {
+		NodeMap     ownmapdal.TagNodeMap
+		WayMap      ownmapdal.TagWayMap
+		RelationMap ownmapdal.TagRelationMap
+	}
+	dataChan := make(chan DataObject)
 	errChan := make(chan errorsx.Error)
 
 	var wg sync.WaitGroup
@@ -100,19 +106,17 @@ func (rr *RasterRenderer) RenderRaster(ctx context.Context, dbConnSet *ownmapdal
 			select {
 			case errFromChan := <-errChan:
 				err = errFromChan
-			case nodeMapFromChan := <-nodeMapChan:
+			case dataObject := <-dataChan:
 				// TODO on conflicting datasets?
-				for k, v := range nodeMapFromChan {
+				for k, v := range dataObject.NodeMap {
 					nodeMap[k] = append(nodeMap[k], v...)
 				}
-			case wayMapFromChan := <-wayMapChan:
 				// TODO on conflicting datasets?
-				for k, v := range wayMapFromChan {
+				for k, v := range dataObject.WayMap {
 					wayMap[k] = append(wayMap[k], v...)
 				}
-			case relationMapFromChan := <-relationMapChan:
 				// TODO on conflicting datasets?
-				for k, v := range relationMapFromChan {
+				for k, v := range dataObject.RelationMap {
 					relationMap[k] = append(relationMap[k], v...)
 				}
 			}
@@ -123,8 +127,6 @@ func (rr *RasterRenderer) RenderRaster(ctx context.Context, dbConnSet *ownmapdal
 	for _, dbConn := range dbConns {
 		wg.Add(1)
 		go func(dbConn *ownmapdal.ChosenConnForBounds) {
-			defer wg.Done()
-
 			span := tracing.StartSpan(ctx, fmt.Sprintf("data for requested area. Datasource: %q", dbConn.Name()))
 
 			nodeMap, wayMap, relationMap, err := dbConn.GetInBounds(ctx, bounds, filter)
@@ -135,7 +137,6 @@ func (rr *RasterRenderer) RenderRaster(ctx context.Context, dbConnSet *ownmapdal
 
 					return
 				}
-				wg.Add(1)
 				errChan <- errorsx.Wrap(err)
 				return
 			}
@@ -151,7 +152,6 @@ func (rr *RasterRenderer) RenderRaster(ctx context.Context, dbConnSet *ownmapdal
 
 			err = rr.addNearbyPlaces(ctx, dbConn, nodeMap, bounds, extraBoundsFilter)
 			if err != nil {
-				wg.Add(1)
 				errChan <- errorsx.Wrap(err)
 				return
 			}
@@ -160,10 +160,11 @@ func (rr *RasterRenderer) RenderRaster(ctx context.Context, dbConnSet *ownmapdal
 
 			log.Printf("datasource: %q. Nodemap len: %d, Waymap len: %d\n", dbConn.Name(), len(nodeMap), len(wayMap))
 
-			wg.Add(3)
-			nodeMapChan <- nodeMap
-			wayMapChan <- wayMap
-			relationMapChan <- relationMap
+			dataChan <- DataObject{
+				NodeMap:     nodeMap,
+				WayMap:      wayMap,
+				RelationMap: relationMap,
+			}
 		}(dbConn)
 	}
 

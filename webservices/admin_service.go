@@ -12,7 +12,6 @@ import (
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/goutil/logpkg"
-	"github.com/jamesrr39/ownmap-app/ownmap"
 	"github.com/jamesrr39/ownmap-app/ownmapdal"
 	"github.com/jamesrr39/ownmap-app/ownmapdal/ownmapdb"
 )
@@ -88,7 +87,7 @@ func (as *AdminService) handlePostRawDataFile(w http.ResponseWriter, r *http.Req
 	var importFunc ownmapdal.ProcessImportFunc
 	switch ownmapdal.DBFileType(dbFileType) {
 	case ownmapdal.DBFileTypeMapmakerDB:
-		importFunc = func(pbfReader ownmapdal.PBFReader) (ownmapdal.DataSourceConn, errorsx.Error) {
+		importFunc = func(pbfReader, auxPbfReader ownmapdal.PBFReader) (ownmapdal.DataSourceConn, errorsx.Error) {
 			workDirPath := filepath.Join(as.pathsConfig.TempDir, time.Now().Format("import_2006-01-02_15_04_05"))
 
 			fs := gofs.NewOsFs()
@@ -115,7 +114,13 @@ func (as *AdminService) handlePostRawDataFile(w http.ResponseWriter, r *http.Req
 				return nil, errorsx.Wrap(err)
 			}
 
-			dbConn, err := ownmapdal.Import(as.logger, pbfReader, fs, importer, ownmap.GetWholeWorldBounds())
+			dbConn, err := ownmapdal.Import2(
+				as.logger,
+				pbfReader,
+				auxPbfReader,
+				fs,
+				importer,
+			)
 			if err != nil {
 				return nil, errorsx.Wrap(err)
 			}

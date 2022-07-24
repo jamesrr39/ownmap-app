@@ -158,53 +158,57 @@ func setTagsOnCollection(keys []*tagCollectionKeyType, collection diskfilemap.On
 	return nil
 }
 
-func (importer *Importer) ImportNode(node *ownmap.OSMNode) errorsx.Error {
-	bb := binaryx.LittleEndianPutUint64(uint64(node.ID))
-	ownmapNodeBytes, err := proto.Marshal(node)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
+func (importer *Importer) ImportNodes(nodes []*ownmap.OSMNode) errorsx.Error {
+	for _, node := range nodes {
+		bb := binaryx.LittleEndianPutUint64(uint64(node.ID))
+		ownmapNodeBytes, err := proto.Marshal(node)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
 
-	err = importer.collections.NodeCollection.Set(bb, ownmapNodeBytes)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
+		err = importer.collections.NodeCollection.Set(bb, ownmapNodeBytes)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
 
-	var tagCollectionKeys []*tagCollectionKeyType
-	for _, tag := range node.Tags {
-		tagCollectionKeys = append(tagCollectionKeys, newTagCollectionKey(node.Lat, node.Lon, ownmap.ObjectTypeNode, tag.Key))
-	}
+		var tagCollectionKeys []*tagCollectionKeyType
+		for _, tag := range node.Tags {
+			tagCollectionKeys = append(tagCollectionKeys, newTagCollectionKey(node.Lat, node.Lon, ownmap.ObjectTypeNode, tag.Key))
+		}
 
-	err = setTagsOnCollection(tagCollectionKeys, importer.collections.TagCollection, node.ID)
-	if err != nil {
-		return errorsx.Wrap(err)
+		err = setTagsOnCollection(tagCollectionKeys, importer.collections.TagCollection, node.ID)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
 	}
 
 	return nil
 }
 
-func (importer *Importer) ImportWay(ownmapWay *ownmap.OSMWay) errorsx.Error {
-	var err error
-	nodes, err := importer.getNodesInWay(ownmapWay)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
+func (importer *Importer) ImportWays(ownmapWays []*ownmap.OSMWay) errorsx.Error {
+	for _, ownmapWay := range ownmapWays {
+		var err error
+		nodes, err := importer.getNodesInWay(ownmapWay)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
 
-	bb := binaryx.LittleEndianPutUint64(uint64(ownmapWay.ID))
-	ownmapWayBytes, err := proto.Marshal(ownmapWay)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
-	err = importer.collections.WayCollection.Set(bb, ownmapWayBytes)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
+		bb := binaryx.LittleEndianPutUint64(uint64(ownmapWay.ID))
+		ownmapWayBytes, err := proto.Marshal(ownmapWay)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+		err = importer.collections.WayCollection.Set(bb, ownmapWayBytes)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
 
-	tagCollectionKeys := buildTagIndexesForObject(ownmapWay.Tags, ownmap.GetPointsFromNodes(nodes), ownmap.ObjectTypeWay)
+		tagCollectionKeys := buildTagIndexesForObject(ownmapWay.Tags, ownmap.GetPointsFromNodes(nodes), ownmap.ObjectTypeWay)
 
-	err = setTagsOnCollection(tagCollectionKeys, importer.collections.TagCollection, ownmapWay.ID)
-	if err != nil {
-		return errorsx.Wrap(err)
+		err = setTagsOnCollection(tagCollectionKeys, importer.collections.TagCollection, ownmapWay.ID)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
 	}
 
 	return nil
@@ -338,37 +342,39 @@ func (importer *Importer) getNodesInWay(way *ownmap.OSMWay) ([]*ownmap.OSMNode, 
 	return nodes, nil
 }
 
-func (importer *Importer) ImportRelation(relation *ownmap.OSMRelation) errorsx.Error {
-	bb := binaryx.LittleEndianPutUint64(uint64(relation.ID))
-	relationBytes, err := proto.Marshal(relation)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
+func (importer *Importer) ImportRelations(relations []*ownmap.OSMRelation) errorsx.Error {
+	for _, relation := range relations {
+		bb := binaryx.LittleEndianPutUint64(uint64(relation.ID))
+		relationBytes, err := proto.Marshal(relation)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
 
-	importer.logger.Debug("about to set relation in collection. ID: %d", relation.ID)
-	err = importer.collections.RelationCollection.Set(bb, relationBytes)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
-	importer.logger.Debug("finished setting relation in collection. ID: %d", relation.ID)
-	tagIndexSet, err := importer.getTagIndexesForRelation(relation)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
+		importer.logger.Debug("about to set relation in collection. ID: %d", relation.ID)
+		err = importer.collections.RelationCollection.Set(bb, relationBytes)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+		importer.logger.Debug("finished setting relation in collection. ID: %d", relation.ID)
+		tagIndexSet, err := importer.getTagIndexesForRelation(relation)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
 
-	var tagCollectionKeys []*tagCollectionKeyType
-	for tagIndex := range tagIndexSet {
-		// copy tagIndex so the pointer is set to different memory locations
-		copyOfTagIndex := tagIndex
-		tagCollectionKeys = append(tagCollectionKeys, &copyOfTagIndex)
-	}
+		var tagCollectionKeys []*tagCollectionKeyType
+		for tagIndex := range tagIndexSet {
+			// copy tagIndex so the pointer is set to different memory locations
+			copyOfTagIndex := tagIndex
+			tagCollectionKeys = append(tagCollectionKeys, &copyOfTagIndex)
+		}
 
-	importer.logger.Debug("about to set tags on tag collection for relation. ID: %d", relation.ID)
-	err = setTagsOnCollection(tagCollectionKeys, importer.collections.TagCollection, relation.ID)
-	if err != nil {
-		return errorsx.Wrap(err)
+		importer.logger.Debug("about to set tags on tag collection for relation. ID: %d", relation.ID)
+		err = setTagsOnCollection(tagCollectionKeys, importer.collections.TagCollection, relation.ID)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+		importer.logger.Debug("finished setting tags on tag collection for relation. ID: %d", relation.ID)
 	}
-	importer.logger.Debug("finished setting tags on tag collection for relation. ID: %d", relation.ID)
 
 	return nil
 }

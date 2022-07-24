@@ -210,7 +210,7 @@ func CompareInt64s(a, b int64) algorithms.SearchResult {
 	return algorithms.SearchResultGoLower
 }
 
-func getNodesFoundFunc(nodeMap map[int64]*ownmap.OSMNode) onFoundBlockDataFuncType {
+func getNodesFoundFunc(nodeMap ItemMap[*ownmap.OSMNode]) onFoundBlockDataFuncType {
 	return func(blockDataBytes *bytes.Buffer, wantedKeys []KeyType) errorsx.Error {
 		blockData := new(NodesBlockData)
 		err := proto.Unmarshal(blockDataBytes.Bytes(), blockData)
@@ -226,41 +226,24 @@ func getNodesFoundFunc(nodeMap map[int64]*ownmap.OSMNode) onFoundBlockDataFuncTy
 			})
 
 			if searchResult != algorithms.SearchResultFound {
-				panic(fmt.Sprintf("key not found: %#v", key, keyInt64))
+				panic(fmt.Sprintf("key not found: %#v, %#v", key, keyInt64))
 			}
 
 			node := blockData.Nodes[idx]
 
-			// FIXME: start debug: not needed
-			_, ok := nodeMap[node.ID]
-			if !ok {
-				panic(fmt.Sprintf("node found but not wanted: %#v", node))
-			}
-			// FIXME: end debug
-
-			nodeMap[node.ID] = node
+			nodeMap.AddItem(node.ID, node)
 		}
-
-		// for _, node := range blockData.Nodes {
-		// 	_, ok := nodeMap[node.ID]
-		// 	if !ok {
-		// 		// node not wanted
-		// 		continue
-		// 	}
-
-		// 	nodeMap[node.ID] = node
-		// }
 
 		return nil
 	}
 }
 
-func (db *MapmakerDBConn) addNodesToNodeMap(file io.ReadSeeker, nodeMap map[int64]*ownmap.OSMNode) errorsx.Error {
+func (db *MapmakerDBConn) addNodesToNodeMap(file io.ReadSeeker, nodeMap ItemMap[*ownmap.OSMNode]) errorsx.Error {
 
 	// make various data structures needed later in the function
 	var keys []KeyType
 
-	for id := range nodeMap {
+	for id := range nodeMap.wantedIDs {
 		key := int64ItemType(id)
 		keys = append(keys, &key)
 	}
@@ -281,7 +264,7 @@ func (db *MapmakerDBConn) addNodesToNodeMap(file io.ReadSeeker, nodeMap map[int6
 	return nil
 }
 
-func getWaysFoundFunc(ctx context.Context, wayMap map[int64]*ownmap.OSMWay) onFoundBlockDataFuncType {
+func getWaysFoundFunc(ctx context.Context, wayMap ItemMap[*ownmap.OSMWay]) onFoundBlockDataFuncType {
 	return func(blockDataBytes *bytes.Buffer, wantedKeys []KeyType) errorsx.Error {
 		span := tracing.StartSpan(ctx, fmt.Sprintf("getWaysFoundFunc. block data bytes: %d", blockDataBytes.Len()))
 		defer span.End(ctx)
@@ -300,19 +283,20 @@ func getWaysFoundFunc(ctx context.Context, wayMap map[int64]*ownmap.OSMWay) onFo
 			})
 
 			if searchResult != algorithms.SearchResultFound {
-				panic(fmt.Sprintf("way: key not found: %#v", key, keyInt64))
+				// can happen when e.g. a relation contains loads of ways, some of which were not in the extract
+				continue
 			}
 
 			way := blockData.Ways[idx]
 
-			wayMap[way.ID] = way
+			wayMap.AddItem(way.ID, way)
 		}
 
 		return nil
 	}
 }
 
-func getRelationsFoundFunc(relationMap map[int64]*ownmap.OSMRelation) onFoundBlockDataFuncType {
+func getRelationsFoundFunc(relationMap ItemMap[*ownmap.OSMRelation]) onFoundBlockDataFuncType {
 	return func(blockDataBytes *bytes.Buffer, wantedKeys []KeyType) errorsx.Error {
 		blockData := new(RelationsBlockData)
 		err := proto.Unmarshal(blockDataBytes.Bytes(), blockData)
@@ -328,23 +312,25 @@ func getRelationsFoundFunc(relationMap map[int64]*ownmap.OSMRelation) onFoundBlo
 			})
 
 			if searchResult != algorithms.SearchResultFound {
-				panic(fmt.Sprintf("way: key not found: %#v", key, keyInt64))
+				// can happen when e.g. a relation contains loads of relations, some of which were not in the extract
+				relationMap.MarkItemAsNotInDataset(keyInt64)
+				continue
 			}
 
 			relation := blockData.Relations[idx]
 
-			relationMap[relation.ID] = relation
+			relationMap.AddItem(relation.ID, relation)
 		}
 
 		return nil
 	}
 }
 
-func (db *MapmakerDBConn) addWaysToWayMap(ctx context.Context, file io.ReadSeeker, wayMap map[int64]*ownmap.OSMWay) errorsx.Error {
+func (db *MapmakerDBConn) addWaysToWayMap(ctx context.Context, file io.ReadSeeker, wayMap ItemMap[*ownmap.OSMWay]) errorsx.Error {
 	// make various data structures needed later in the function
 	var keys []KeyType
 
-	for id := range wayMap {
+	for id := range wayMap.wantedIDs {
 		key := int64ItemType(id)
 		keys = append(keys, &key)
 	}
@@ -417,6 +403,7 @@ func getBlockIndexesForKeys(sectionMetadata *SectionMetadata, keys []KeyType, em
 	return blockIdxKeyMap, nil
 }
 
+// getBlockDatasByIDs takes a set of KeyType, finds the sections where the data for these keys should be stored, and runs onFoundBlockDataFunc on that set of data
 func (db *MapmakerDBConn) getBlockDatasByIDs(
 	file io.ReadSeeker,
 	wantedKeys []KeyType,
@@ -472,18 +459,14 @@ func (db *MapmakerDBConn) decodeBlock(
 
 func (db *MapmakerDBConn) addRelationsToRelationMap(
 	file io.ReadSeeker,
-	relationMap map[int64]*ownmap.OSMRelation,
-	wayMap map[int64]*ownmap.OSMWay,
-	nodeMap map[int64]*ownmap.OSMNode,
+	relationMap ItemMap[*ownmap.OSMRelation],
+	wayMap ItemMap[*ownmap.OSMWay],
+	nodeMap ItemMap[*ownmap.OSMNode],
 ) errorsx.Error {
 	// make various data structures needed later in the function
 	var keys []KeyType
 
-	for id, relation := range relationMap {
-		if relation != nil {
-			// skip this relation, it has already been fetched and added to the map
-			continue
-		}
+	for id := range relationMap.wantedIDs {
 		key := int64ItemType(id)
 		keys = append(keys, &key)
 	}
@@ -500,8 +483,7 @@ func (db *MapmakerDBConn) addRelationsToRelationMap(
 		return errorsx.Wrap(err)
 	}
 
-	mustRescanRelations := false
-	for _, relation := range relationMap {
+	for _, relation := range relationMap.itemMap {
 		if relation == nil {
 			// skip; probably the relation we are looking for is outside the bounds of the data file
 			continue
@@ -509,19 +491,31 @@ func (db *MapmakerDBConn) addRelationsToRelationMap(
 		for _, member := range relation.Members {
 			switch member.MemberType {
 			case ownmap.OSM_MEMBER_TYPE_NODE:
-				nodeMap[member.ObjectID] = nil
+				if nodeMap.ShouldScanForItem(member.ObjectID) {
+					// if node ID is not already fetched, make sure the ID is in the map to fetch
+					nodeMap.MarkItemForScanning(member.ObjectID)
+				}
 			case ownmap.OSM_MEMBER_TYPE_WAY:
-				wayMap[member.ObjectID] = nil
+				if wayMap.ShouldScanForItem(member.ObjectID) {
+					// if way ID is not already fetched, make sure the ID is in the map to fetch
+					wayMap.MarkItemForScanning(member.ObjectID)
+				}
 			case ownmap.OSM_MEMBER_TYPE_RELATION:
-				relationMap[member.ObjectID] = nil
-				mustRescanRelations = true
+				memberRelation := relationMap.itemMap[member.ObjectID]
+				if memberRelation == nil {
+					if relationMap.ShouldScanForItem(member.ObjectID) {
+						// relation ID has not already been fetched, make sure the ID is in the map to fetch
+						relationMap.MarkItemForScanning(member.ObjectID)
+					}
+				}
 			default:
 				return errorsx.Errorf("unrecognized member type: %v", member.MemberType)
 			}
 		}
 	}
 
-	if mustRescanRelations {
+	if len(relationMap.wantedIDs) != 0 {
+		// rescan and find the wanted IDs
 		return db.addRelationsToRelationMap(file, relationMap, wayMap, nodeMap)
 	}
 
@@ -562,22 +556,22 @@ func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, fi
 		return nil, nil, nil, errorsx.Wrap(err)
 	}
 
-	nodeMap := make(map[int64]*ownmap.OSMNode)
-	wayMap := make(map[int64]*ownmap.OSMWay)
-	relationMap := make(map[int64]*ownmap.OSMRelation)
+	nodeMap := NewItemMap[*ownmap.OSMNode]()
+	wayMap := NewItemMap[*ownmap.OSMWay]()
+	relationMap := NewItemMap[*ownmap.OSMRelation]()
 	for tagIndex, ids := range wantedTagIndexSections {
 		switch tagIndex.ObjectType {
 		case ownmap.ObjectTypeNode:
 			for _, id := range ids {
-				nodeMap[id] = nil
+				nodeMap.MarkItemForScanning(id)
 			}
 		case ownmap.ObjectTypeWay:
 			for _, id := range ids {
-				wayMap[id] = nil
+				wayMap.MarkItemForScanning(id)
 			}
 		case ownmap.ObjectTypeRelation:
 			for _, id := range ids {
-				relationMap[id] = nil
+				relationMap.MarkItemForScanning(id)
 			}
 		default:
 			return nil, nil, nil, errorsx.Errorf("didn't understand object type: %v", tagIndex.ObjectType)
@@ -622,7 +616,7 @@ func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, fi
 		}
 	}
 
-	for _, node := range nodeMap {
+	for _, node := range nodeMap.itemMap {
 		for _, tag := range node.Tags {
 			tagKey := ownmap.TagKey(tag.Key)
 			_, ok := nodeTagMap[tagKey]
@@ -635,7 +629,11 @@ func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, fi
 		}
 	}
 
-	for _, way := range wayMap {
+	for _, way := range wayMap.itemMap {
+		if way == nil {
+			// way is in relation but is not in our data file. This is quite common, e.g. on large relations, so just skip finding the way
+			continue
+		}
 		for _, tag := range way.Tags {
 			tagKey := ownmap.TagKey(tag.Key)
 			_, ok := wayTagMap[tagKey]
@@ -648,7 +646,7 @@ func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, fi
 		}
 	}
 
-	for _, relation := range relationMap {
+	for _, relation := range relationMap.itemMap {
 		for _, tag := range relation.Tags {
 			tagKey := ownmap.TagKey(tag.Key)
 			_, ok := relationTagMap[tagKey]
@@ -663,17 +661,17 @@ func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, fi
 				case ownmap.OSM_MEMBER_TYPE_NODE:
 					relationMembers = append(relationMembers, &ownmap.RelationMemberData{
 						Role:   member.Role,
-						Object: nodeMap[member.ObjectID],
+						Object: nodeMap.itemMap[member.ObjectID],
 					})
 				case ownmap.OSM_MEMBER_TYPE_WAY:
 					relationMembers = append(relationMembers, &ownmap.RelationMemberData{
 						Role:   member.Role,
-						Object: wayMap[member.ObjectID],
+						Object: wayMap.itemMap[member.ObjectID],
 					})
 				case ownmap.OSM_MEMBER_TYPE_RELATION:
 					relationMembers = append(relationMembers, &ownmap.RelationMemberData{
 						Role:   member.Role,
-						Object: relationMap[member.ObjectID],
+						Object: relationMap.itemMap[member.ObjectID],
 					})
 				default:
 					return nil, nil, nil, errorsx.Errorf("unrecognised object type: %v", member.MemberType)
