@@ -72,7 +72,7 @@ func (l *Layer) GetLayerNodeStyle(node *ownmap.OSMNode, zoomLevel ownmap.ZoomLev
 			}
 		}
 	default:
-		log.Printf("unhandled node layer type: %q", l.Type)
+		log.Printf("mapboxglstyle: unhandled node layer type: %q", l.Type)
 	}
 
 	return nil
@@ -109,7 +109,7 @@ func (l *Layer) GetLayerWayStyle(tags []*ownmap.OSMTag, zoomLevel ownmap.ZoomLev
 			ZIndex:         layerIndex,
 		}
 	default:
-		log.Printf("unhandled way layer type: %q", l.Type)
+		log.Printf("mapboxglstyle: unhandled way layer type: %q", l.Type)
 	}
 
 	return nil
