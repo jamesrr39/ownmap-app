@@ -120,6 +120,7 @@ func (as *AdminService) handlePostRawDataFile(w http.ResponseWriter, r *http.Req
 				auxPbfReader,
 				fs,
 				importer,
+				ownmapdal.DefaultImporter2Opts(),
 			)
 			if err != nil {
 				return nil, errorsx.Wrap(err)

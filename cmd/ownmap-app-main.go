@@ -453,11 +453,10 @@ func setupImport() {
 			}
 
 		case ownmapdal.DBFileTypePostgresql:
-			panic("implemention TODO")
-			// finalStorage, err = ownmappostgresql.NewFinalStorage(dbConnConfig.ConnectionPath, pbfHeader)
-			// if err != nil {
-			// 	return errorsx.Wrap(err)
-			// }
+			finalStorage, err = ownmappostgresql.NewFinalStorage(dbConnConfig.ConnectionPath, pbfHeader)
+			if err != nil {
+				return errorsx.Wrap(err)
+			}
 
 		case ownmapdal.DBFileTypeParquet:
 			finalStorage, err = parquetdb.NewFinalStorage(dbConnConfig.ConnectionPath, pbfHeader, *parquetRowGroupSize)
@@ -469,7 +468,9 @@ func setupImport() {
 			return errorsx.Errorf("unknown DB file type: %q\n", dbConnConfig.Type)
 		}
 
-		_, err = ownmapdal.Import2(logger, pbfReader, auxillaryPBFReader, fs, finalStorage)
+		importerOpts := ownmapdal.DefaultImporter2Opts()
+
+		_, err = ownmapdal.Import2(logger, pbfReader, auxillaryPBFReader, fs, finalStorage, importerOpts)
 		if err != nil {
 			return errorsx.Wrap(err)
 		}

@@ -1,7 +1,9 @@
 package ownmapsqldb
 
 import (
-	"database/sql"
+	"fmt"
+	"log"
+	"strings"
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/ownmap"
@@ -9,8 +11,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/paulmach/osm/osmpbf"
 )
-
-var _ ownmapdal.Importer = &Importer{}
 
 type toDatasourceConnFunc func() (ownmapdal.DataSourceConn, errorsx.Error)
 
@@ -31,176 +31,73 @@ func NewImporter(db *sqlx.DB, pbfHeader *osmpbf.Header, toDatasourceConn toDatas
 	}, nil
 }
 
-func (importer *Importer) GetNodeByID(id int64) (*ownmap.OSMNode, error) {
-	row := importer.tx.QueryRow("SELECT id, lat, lon FROM nodes WHERE id = $1", id)
-	if row.Err() != nil {
-		return nil, errorsx.Wrap(row.Err())
-	}
+const maxBatchSize = 20 * 1000 // to avoid: pq: got 99999 parameters but PostgreSQL only supports 65535 parameters
 
-	node := new(ownmap.OSMNode)
-	err := row.Scan(&node.ID, &node.Lat, &node.Lon)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, errorsx.ObjectNotFound
+func (importer *Importer) ImportNodes(objs []*ownmap.OSMNode) errorsx.Error {
+	var totalImportCount int64
+	for {
+		var nodeInsertSQLValueRows, tagsInsertSQLValueRows []string
+		var nodeValues, tagValues []any
+		var lastNodeArgsCounter, lastTagArgsCounter int
+		var nodesInBatch, tagsInBatch int
+
+		for i := 0; i < maxBatchSize; i++ {
+			if totalImportCount >= int64(len(objs)) {
+				// reached the last object. Break out of this loop, import the last ones
+				break
+			}
+			obj := objs[totalImportCount]
+
+			nodeInsertSQLValueRows = append(
+				nodeInsertSQLValueRows,
+				fmt.Sprintf("($%d, $%d, $%d)", lastNodeArgsCounter+1, lastNodeArgsCounter+2, lastNodeArgsCounter+3),
+			)
+			nodeValues = append(nodeValues, obj.ID, obj.Lat, obj.Lon)
+
+			nodesInBatch++
+			lastNodeArgsCounter += 3
+
+			for _, tag := range obj.Tags {
+				tagsInsertSQLValueRows = append(
+					tagsInsertSQLValueRows,
+					fmt.Sprintf(`($%d, $%d, $%d, $%d)`, lastTagArgsCounter+1, lastTagArgsCounter+2, lastTagArgsCounter+3, lastTagArgsCounter+4),
+				)
+				tagValues = append(tagValues, obj.ID, ownmap.ObjectTypeNode, tag.Key, tag.Value)
+
+				tagsInBatch++
+				lastTagArgsCounter += 4
+			}
+
+			totalImportCount++
+
+			// check if there are too many nodes/ways/relations/tags/waypoints/relation members
+			if len(nodeValues) >= maxBatchSize || len(tagValues) >= maxBatchSize {
+				break
+			}
 		}
 
-		return nil, errorsx.Wrap(err)
-	}
+		if len(nodeValues) == 0 {
+			// all done
+			break
+		}
 
-	rows, err := importer.tx.Query("SELECT key, value FROM tags t WHERE t.object_id = $1 AND t.object_type_id = $2", id, ownmap.ObjectTypeNode)
-	if err != nil {
-		return nil, errorsx.Wrap(err)
-	}
-	defer rows.Close()
+		log.Printf("importing %d nodes and %d tags\n", nodesInBatch, tagsInBatch)
 
-	for rows.Next() {
-		tag := new(ownmap.OSMTag)
-		err = rows.Scan(&tag.Key, &tag.Value)
+		// insert nodes
+		insertSQL := fmt.Sprintf(`INSERT INTO nodes (id, lat, lon) VALUES %s`, strings.Join(nodeInsertSQLValueRows, ", "))
+		_, err := importer.tx.Exec(insertSQL, nodeValues...)
 		if err != nil {
-			return nil, errorsx.Wrap(err)
+			return errorsx.Wrap(err)
 		}
 
-		node.Tags = append(node.Tags, tag)
-	}
-
-	if rows.Err() != nil {
-		return nil, errorsx.Wrap(rows.Err())
-	}
-
-	return node, nil
-}
-func (importer *Importer) GetWayByID(id int64) (*ownmap.OSMWay, error) {
-	row := importer.tx.QueryRow("SELECT id FROM ways WHERE id = $1", id)
-	if row.Err() != nil {
-		return nil, errorsx.Wrap(row.Err())
-	}
-
-	var discard int64
-	err := row.Scan(&discard)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, errorsx.ObjectNotFound
-		}
-		return nil, errorsx.Wrap(err)
-	}
-
-	way := &ownmap.OSMWay{ID: id}
-
-	rows, err := importer.tx.Query("SELECT key, value FROM tags t WHERE t.object_id = $1 AND t.object_type_id = $2", id, ownmap.ObjectTypeWay)
-	if err != nil {
-		return nil, errorsx.Wrap(err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		tag := new(ownmap.OSMTag)
-		err = rows.Scan(&tag.Key, &tag.Value)
-		if err != nil {
-			return nil, errorsx.Wrap(err)
+		if len(tagValues) == 0 {
+			// nothing to insert
+			return nil
 		}
 
-		way.Tags = append(way.Tags, tag)
-	}
-
-	if rows.Err() != nil {
-		return nil, errorsx.Wrap(rows.Err())
-	}
-
-	// nodes in way
-
-	rows, err = importer.tx.Query("SELECT node_id FROM way_nodes wn WHERE wn.way_id = $1", id)
-	if err != nil {
-		return nil, errorsx.Wrap(err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var nodeID int64
-		err = rows.Scan(&nodeID)
-		if err != nil {
-			return nil, errorsx.Wrap(err)
-		}
-
-		way.WayPoints = append(way.WayPoints, &ownmap.WayPoint{
-			NodeID: nodeID,
-		})
-	}
-
-	if rows.Err() != nil {
-		return nil, errorsx.Wrap(rows.Err())
-	}
-
-	return way, nil
-}
-func (importer *Importer) GetRelationByID(id int64) (*ownmap.OSMRelation, error) {
-	row := importer.tx.QueryRow("SELECT id FROM relations WHERE id = $1", id)
-	if row.Err() != nil {
-		return nil, errorsx.Wrap(row.Err())
-	}
-
-	var discard int64
-	err := row.Scan(&discard)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, errorsx.ObjectNotFound
-		}
-		return nil, errorsx.Wrap(err)
-	}
-
-	relation := &ownmap.OSMRelation{ID: id}
-
-	rows, err := importer.tx.Query("SELECT key, value FROM tags t WHERE t.object_id = $1 AND t.object_type_id = $2", id, ownmap.ObjectTypeRelation)
-	if err != nil {
-		return nil, errorsx.Wrap(err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		tag := new(ownmap.OSMTag)
-		err = rows.Scan(&tag.Key, &tag.Value)
-		if err != nil {
-			return nil, errorsx.Wrap(err)
-		}
-
-		relation.Tags = append(relation.Tags, tag)
-	}
-
-	if rows.Err() != nil {
-		return nil, errorsx.Wrap(rows.Err())
-	}
-
-	// nodes in way
-
-	rows, err = importer.tx.Query("SELECT member_id, member_type, role, orientation FROM relation_members rm WHERE rm.parent_id = $1", id)
-	if err != nil {
-		return nil, errorsx.Wrap(err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		member := new(ownmap.OSMRelationMember)
-		err = rows.Scan(&member.ObjectID, &member.MemberType, &member.Role, &member.Orientation)
-		if err != nil {
-			return nil, errorsx.Wrap(err)
-		}
-
-		relation.Members = append(relation.Members, member)
-	}
-
-	if rows.Err() != nil {
-		return nil, errorsx.Wrap(rows.Err())
-	}
-
-	return relation, nil
-}
-func (importer *Importer) ImportNode(obj *ownmap.OSMNode) errorsx.Error {
-	_, err := importer.tx.Exec(`INSERT INTO nodes (id, lat, lon) VALUES ($1, $2, $3)`, obj.ID, obj.Lat, obj.Lon)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
-
-	for _, tag := range obj.Tags {
-		_, err = importer.tx.Exec(`INSERT INTO tags (object_id, object_type_id, key, value) VALUES ($1, $2, $3, $4)`, obj.ID, ownmap.ObjectTypeNode, tag.Key, tag.Value)
+		// insert tags
+		tagsInsertSQL := fmt.Sprintf(`INSERT INTO tags (object_id, object_type_id, key, value) VALUES %s`, strings.Join(tagsInsertSQLValueRows, ", "))
+		_, err = importer.tx.Exec(tagsInsertSQL, tagValues...)
 		if err != nil {
 			return errorsx.Wrap(err)
 		}
@@ -208,21 +105,87 @@ func (importer *Importer) ImportNode(obj *ownmap.OSMNode) errorsx.Error {
 
 	return nil
 }
-func (importer *Importer) ImportWay(obj *ownmap.OSMWay) errorsx.Error {
-	_, err := importer.tx.Exec(`INSERT INTO ways (id) VALUES ($1)`, obj.ID)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
+func (importer *Importer) ImportWays(objs []*ownmap.OSMWay) errorsx.Error {
+	var totalImportCount int64
+	for {
+		var wayInsertSQLValueRows, tagsInsertSQLValueRows, waypointInsertSQLValueRows []string
+		var wayValues, tagValues, waypointValues []any
+		var lastNodeArgsCounter, lastTagArgsCounter, lastWaypointArgsCount int
+		var waysInBatch, tagsInBatch, waypointsInBatch int
 
-	for _, tag := range obj.Tags {
-		_, err = importer.tx.Exec(`INSERT INTO tags (object_id, object_type_id, key, value) VALUES ($1, $2, $3, $4)`, obj.ID, ownmap.ObjectTypeWay, tag.Key, tag.Value)
+		for i := 0; i < maxBatchSize; i++ {
+			if totalImportCount >= int64(len(objs)) {
+				// reached the last object. Break out of this loop, import the last ones
+				break
+			}
+
+			obj := objs[totalImportCount]
+
+			wayInsertSQLValueRows = append(
+				wayInsertSQLValueRows,
+				fmt.Sprintf("($%d)", lastNodeArgsCounter+1),
+			)
+			wayValues = append(wayValues, obj.ID)
+
+			waysInBatch++
+			lastNodeArgsCounter += 1
+
+			if len(obj.Tags) > 1000 {
+				log.Printf("over 1000 tags. Way ID: %d\n", obj.ID)
+			}
+
+			for _, tag := range obj.Tags {
+				tagsInsertSQLValueRows = append(
+					tagsInsertSQLValueRows,
+					fmt.Sprintf(`($%d, $%d, $%d, $%d)`, lastTagArgsCounter+1, lastTagArgsCounter+2, lastTagArgsCounter+3, lastTagArgsCounter+4),
+				)
+				tagValues = append(tagValues, obj.ID, ownmap.ObjectTypeWay, tag.Key, tag.Value)
+
+				tagsInBatch++
+				lastTagArgsCounter += 4
+			}
+
+			for _, waypoint := range obj.WayPoints {
+				waypointInsertSQLValueRows = append(
+					waypointInsertSQLValueRows,
+					fmt.Sprintf(`($%d, $%d)`, lastWaypointArgsCount+1, lastWaypointArgsCount+2),
+				)
+				waypointValues = append(waypointValues, waypoint.NodeID, obj.ID)
+
+				waypointsInBatch++
+				lastWaypointArgsCount += 2
+			}
+
+			totalImportCount++
+
+			// check if there are too many nodes/ways/relations/tags/waypoints/relation members
+			if len(wayValues) >= maxBatchSize || len(tagValues) >= maxBatchSize || len(waypointValues) >= maxBatchSize {
+				break
+			}
+		}
+
+		if len(wayValues) == 0 {
+			// all done
+			break
+		}
+
+		log.Printf("importing %d ways, %d tags and %d waypoints\n", waysInBatch, tagsInBatch, waypointsInBatch)
+
+		waysInsertSQL := fmt.Sprintf(`INSERT INTO ways (id) VALUES %s`, strings.Join(wayInsertSQLValueRows, ", "))
+		_, err := importer.tx.Exec(waysInsertSQL, wayValues...)
 		if err != nil {
 			return errorsx.Wrap(err)
 		}
-	}
 
-	for _, waypoint := range obj.WayPoints {
-		_, err = importer.tx.Exec(`INSERT INTO way_nodes (way_id, node_id) VALUES ($1, $2)`, obj.ID, waypoint.NodeID)
+		// insert tags
+		tagsInsertSQL := fmt.Sprintf(`INSERT INTO tags (object_id, object_type_id, key, value) VALUES %s`, strings.Join(tagsInsertSQLValueRows, ", "))
+		_, err = importer.tx.Exec(tagsInsertSQL, tagValues...)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+
+		waypointsInsertSQL := fmt.Sprintf(`INSERT INTO way_nodes (way_id, node_id) VALUES %s`, strings.Join(waypointInsertSQLValueRows, ", "))
+		_, err = importer.tx.Exec(waypointsInsertSQL, waypointValues...)
 		if err != nil {
 			return errorsx.Wrap(err)
 		}
@@ -231,23 +194,93 @@ func (importer *Importer) ImportWay(obj *ownmap.OSMWay) errorsx.Error {
 	return nil
 }
 
-func (importer *Importer) ImportRelation(obj *ownmap.OSMRelation) errorsx.Error {
-	_, err := importer.tx.Exec(`INSERT INTO relations (id) VALUES ($1)`, obj.ID)
-	if err != nil {
-		return errorsx.Wrap(err)
-	}
+func (importer *Importer) ImportRelations(objs []*ownmap.OSMRelation) errorsx.Error {
+	var totalImportCount int64
+	for {
+		var relationsInsertSQLValueRows, tagsInsertSQLValueRows, memberInsertSQLValueRows []string
+		var relationsValues, tagValues, memberValues []any
+		var lastRelationArgsCounter, lastTagArgsCounter, lastMemberArgsCount int
+		var relationsInBatch, tagsInBatch, membersInBatch int
 
-	for _, tag := range obj.Tags {
-		_, err = importer.tx.Exec(`INSERT INTO tags (object_id, object_type_id, key, value) VALUES ($1, $2, $3, $4)`, obj.ID, ownmap.ObjectTypeRelation, tag.Key, tag.Value)
+		for i := 0; i < maxBatchSize; i++ {
+			if totalImportCount >= int64(len(objs)) {
+				// reached the last object. Break out of this loop, import the last ones
+				break
+			}
+
+			obj := objs[totalImportCount]
+
+			relationsInsertSQLValueRows = append(
+				relationsInsertSQLValueRows,
+				fmt.Sprintf("($%d)", lastRelationArgsCounter+1),
+			)
+			relationsValues = append(relationsValues, obj.ID)
+
+			relationsInBatch++
+			lastRelationArgsCounter += 1
+
+			for _, tag := range obj.Tags {
+				tagsInsertSQLValueRows = append(
+					tagsInsertSQLValueRows,
+					fmt.Sprintf(`($%d, $%d, $%d, $%d)`, lastTagArgsCounter+1, lastTagArgsCounter+2, lastTagArgsCounter+3, lastTagArgsCounter+4),
+				)
+				tagValues = append(tagValues, obj.ID, ownmap.ObjectTypeRelation, tag.Key, tag.Value)
+
+				tagsInBatch++
+				lastTagArgsCounter += 4
+			}
+
+			for _, member := range obj.Members {
+				memberInsertSQLValueRows = append(
+					memberInsertSQLValueRows,
+					fmt.Sprintf(
+						`($%d, $%d, $%d, $%d, $%d)`,
+						lastMemberArgsCount+1, lastMemberArgsCount+2, lastMemberArgsCount+3, lastMemberArgsCount+4, lastMemberArgsCount+5,
+					),
+				)
+				memberValues = append(memberValues, member.ObjectID, member.MemberType, member.Role, member.Orientation, obj.ID)
+
+				membersInBatch++
+				lastMemberArgsCount += 5
+			}
+
+			totalImportCount++
+
+			// check if there are too many nodes/ways/relations/tags/waypoints/relation members
+			if len(relationsValues) >= maxBatchSize || len(tagValues) >= maxBatchSize || len(memberValues) >= maxBatchSize {
+				break
+			}
+		}
+
+		if len(relationsValues) == 0 {
+			// all done
+			break
+		}
+
+		log.Printf("importing %d relations, %d tags and %d relation members\n", relationsInBatch, tagsInBatch, membersInBatch)
+
+		relationsInsertSQL := fmt.Sprintf(`INSERT INTO relations (id) VALUES %s`, strings.Join(relationsInsertSQLValueRows, ", "))
+		_, err := importer.tx.Exec(relationsInsertSQL, relationsValues...)
 		if err != nil {
 			return errorsx.Wrap(err)
 		}
-	}
 
-	for _, member := range obj.Members {
-		_, err = importer.tx.Exec(`INSERT INTO relation_members (member_id, member_type, role, orientation, parent_id) VALUES ($1, $2, $3, $4, $5)`,
-			member.ObjectID, member.MemberType, member.Role, member.Orientation, obj.ID,
-		)
+		// insert tags
+		tagsInsertSQL := fmt.Sprintf(`INSERT INTO tags (object_id, object_type_id, key, value) VALUES %s`, strings.Join(tagsInsertSQLValueRows, ", "))
+		_, err = importer.tx.Exec(tagsInsertSQL, tagValues...)
+		if err != nil {
+			return errorsx.Wrap(err)
+		}
+
+		// insert relation members
+		membersInsertSQL := fmt.Sprintf(`INSERT INTO relation_members (
+			member_id,
+			member_type,
+			role,
+			orientation,
+			parent_id
+		) VALUES %s`, strings.Join(memberInsertSQLValueRows, ", "))
+		_, err = importer.tx.Exec(membersInsertSQL, memberValues...)
 		if err != nil {
 			return errorsx.Wrap(err)
 		}

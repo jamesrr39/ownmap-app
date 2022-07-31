@@ -63,6 +63,7 @@ func Import2(
 	auxillaryPbfReader PBFReader,
 	fs gofs.Fs,
 	finalStorage FinalStorage,
+	opts Importer2Opts,
 ) (DataSourceConn, errorsx.Error) {
 	var successful bool
 
@@ -81,7 +82,7 @@ func Import2(
 		auxillaryPbfReader: auxillaryPbfReader,
 		fs:                 fs,
 		finalStorage:       finalStorage,
-		opts:               DefaultImporter2Opts(),
+		opts:               opts,
 	}
 
 	header, err := pbfReader.Header()
