@@ -46,7 +46,7 @@ EXPLAIN ANALYZE SELECT id, UNNEST(tags)['key'] FROM 'nodes.parquet' WHERE tags I
 WITH unnested AS (SELECT id, UNNEST(tags)['key'] AS key, UNNEST(tags)['value'] AS value FROM 'ways.parquet' WHERE tags IS NOT NULL)
 SELECT * FROM unnested WHERE key = 'highway' AND value IN ('motorway', 'primary');
 
--- Use `list_has` to query tags by a duckdb `struct`
+-- Use `list_has` to query tags by a duckdb `struct`. Note: it is only possible to query by the full struct (e.g. you cannot just query by `key`, you must also supply `value` as well)
 
 SELECT * FROM 'ways.parquet' WHERE list_has(tags, {'key': 'highway', 'value': 'motorway'});
 
