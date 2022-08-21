@@ -6,7 +6,7 @@ The aim of this project is to be able to provide a 1-file program that can gener
 
 The project contains:
 
-- A custom data file format, for storing data for quick retrieval and map tile creation;
+- A custom data file format, for storing data for quick retrieval and map tile creation. Parquet support is being worked [here](https://github.com/jamesrr39/ownmap-app/tree/parquet).
 - Support for different style types: a custom in-built style and partial support for MapBoxGL styles (with the idea to also support CartoCSS in the future).
 - A rasterer: for drawing tile images, given the data and style.
 - A web server, for handling a request for fetching a tile, with a given style, and returning the drawn style.
