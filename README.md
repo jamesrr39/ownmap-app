@@ -1,12 +1,12 @@
 # ownmap
 
-**Please note, the status of this project is "pre-alpha testing development". This means that interfaces, file formats, APIs can (and will) change on a regular basis without any notice.**
+**Please note, this project is still being developed and hasn't reached a point where APIs are stable yet. This means that for the moment, interfaces, file formats, APIs can change without any notice.**
 
 The aim of this project is to be able to provide a 1-file program that can generate "slippy" maps from openstreetmap PBF files. Ideally it should be able to run (at least serving map tiles) on low-end hard, with a Raspberry Pi-level computer being the target (ideally the Raspberry Pi Zero, but that might be a stretch considering how powerful the hardware is).
 
 The project contains:
 
-- A custom data file format, for storing data for quick retrieval and map tile creation;
+- A custom data file format, for storing data for quick retrieval and map tile creation. Parquet support is being worked [here](https://github.com/jamesrr39/ownmap-app/tree/parquet).
 - Support for different style types: a custom in-built style and partial support for MapBoxGL styles (with the idea to also support CartoCSS in the future).
 - A rasterer: for drawing tile images, given the data and style.
 - A web server, for handling a request for fetching a tile, with a given style, and returning the drawn style.
