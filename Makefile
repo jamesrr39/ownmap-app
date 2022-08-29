@@ -53,7 +53,7 @@ run_dev_server__basic_style:
 
 .PHONY: build
 build:
-	CGO_ENABLED=0 go build -o build/default/makmaker cmd/ownmap-app-main.go
+	CGO_ENABLED=0 go build -o build/default/ownmap cmd/ownmap-app-main.go
 
 # .PHONY: run_dev_import_docker
 # run_dev_import_docker:
