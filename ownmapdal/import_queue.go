@@ -38,7 +38,7 @@ func (i ImportStatus) String() string {
 
 type OnImportedSuccessfullyFunc func(dataSource DataSourceConn)
 
-type ProcessImportFunc func(pbfReader PBFReader) (DataSourceConn, errorsx.Error)
+type ProcessImportFunc func(pbfReader, auxPbfReader PBFReader) (DataSourceConn, errorsx.Error)
 
 type ImportQueueItem struct {
 	datasource      *DataSourceConn
@@ -152,6 +152,17 @@ func (q *ImportQueue) importQueueItem(item *ImportQueueItem) (DataSourceConn, er
 		return nil, errorsx.Wrap(err)
 	}
 
+	auxRawDataFile, err := os.Open(item.RawDataFilePath)
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+	defer rawDataFile.Close()
+
+	auxPbfReader, err := NewDefaultPBFReader(auxRawDataFile)
+	if err != nil {
+		return nil, errorsx.Wrap(err)
+	}
+
 	item.Status = ImportStatusInProgress
 	startTime := time.Now()
 
@@ -171,7 +182,7 @@ func (q *ImportQueue) importQueueItem(item *ImportQueueItem) (DataSourceConn, er
 		}
 	}()
 
-	dataSource, err := item.processFunc(pbfReader)
+	dataSource, err := item.processFunc(pbfReader, auxPbfReader)
 	if err != nil {
 		return nil, errorsx.Wrap(err)
 	}

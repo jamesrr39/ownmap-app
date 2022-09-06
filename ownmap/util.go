@@ -107,3 +107,20 @@ func NewMapmakerRelationFromOSMRelation(osmRelation *osm.Relation) (*OSMRelation
 		Members: members,
 	}, nil
 }
+
+func NewMapmakerNodeFromOSMRelation(obj *osm.Node) *OSMNode {
+	return &OSMNode{
+		ID:   int64(obj.ID),
+		Lat:  obj.Lat,
+		Lon:  obj.Lon,
+		Tags: NewMapmakerTagsFromOSMTags(obj.Tags),
+	}
+}
+
+func NewMapmakerWayFromOSMRelation(obj *osm.Way, wayPoints []*WayPoint) *OSMWay {
+	return &OSMWay{
+		ID:        int64(obj.ID),
+		Tags:      NewMapmakerTagsFromOSMTags(obj.Tags),
+		WayPoints: wayPoints,
+	}
+}

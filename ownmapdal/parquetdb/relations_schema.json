@@ -1,0 +1,46 @@
+{
+    "Tag": "name=Parquet_go_root",
+    "Fields": [
+        {
+            "Tag": "name=Id, type=INT64"
+        },
+        {
+            "Tag": "name=Tags, type=LIST",
+            "Fields": [
+                {
+                    "Tag": "name=Element",
+                    "Fields": [
+                        {
+                            "Tag": "name=Key, type=BYTE_ARRAY, convertedtype=UTF8"
+                        },
+                        {
+                            "Tag": "name=Value, type=BYTE_ARRAY, convertedtype=UTF8"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "Tag": "name=Members, type=LIST",
+            "Fields": [
+                {
+                    "Tag": "name=Element",
+                    "Fields": [
+                        {
+                            "Tag": "name=ObjectId, type=INT64"
+                        },
+                        {
+                            "Tag": "name=MemberType, type=INT32"
+                        },
+                        {
+                            "Tag": "name=Role, type=BYTE_ARRAY, convertedtype=UTF8"
+                        },
+                        {
+                            "Tag": "name=Orientation, type=INT32"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

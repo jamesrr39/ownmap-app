@@ -5,56 +5,58 @@ option go_package = "github.com/jamesrr39/ownmap-app/ownmap";
 import "vendor/github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 message OSMNode {
-	int64 id = 1 [(gogoproto.customname) = "ID"];
-	repeated OSMTag tags = 2;
-	double lat = 3;
-	double lon = 4;
+	int64 id = 1 [(gogoproto.customname) = "ID", (gogoproto.moretags) = "parquet:\"name=id, type=INT64\""];
+	repeated OSMTag tags = 2 [(gogoproto.moretags) = "parquet:\"name=tags, type=LIST\""];
+	double lat = 3 [(gogoproto.moretags) = "parquet:\"name=lat, type=DOUBLE\""];
+	double lon = 4 [(gogoproto.moretags) = "parquet:\"name=lon, type=DOUBLE\""];
 }
 
 message OSMTag {
-	string key = 1;
-	string value = 2;
+	string key = 1 [(gogoproto.moretags) = "parquet:\"name=key, type=BYTE_ARRAY, convertedtype=UTF8\""];
+	string value = 2 [(gogoproto.moretags) = "parquet:\"name=value, type=BYTE_ARRAY, convertedtype=UTF8\""];
 }
 
 message Location {
-	double lat = 1;
-	double lon = 2;
+	double lat = 1 [(gogoproto.moretags) = "parquet:\"name=lat, type=DOUBLE\""];
+	double lon = 2 [(gogoproto.moretags) = "parquet:\"name=lon, type=DOUBLE\""];
 }
 
 message WayPoint {
-	int64 node_id = 1 [(gogoproto.customname) = "NodeID", (gogoproto.jsontag) = "nodeId"];
-	Location point = 2;
+	int64 node_id = 1 [(gogoproto.customname) = "NodeID", (gogoproto.jsontag) = "nodeId", (gogoproto.moretags) = "parquet:\"name=nodeId, type=INT64\""];
+	Location point = 2 [(gogoproto.moretags) = "parquet:\"name=point, type=STRUCT\""];
 }
 
 message OSMWay {
-    int64 id = 1 [(gogoproto.customname) = "ID"];
-    repeated OSMTag tags = 2;
-	repeated WayPoint way_points = 3 [(gogoproto.customname) = "WayPoints", (gogoproto.jsontag) = "wayPoints"];
+    int64 id = 1 [(gogoproto.customname) = "ID", (gogoproto.moretags) = "parquet:\"name=id, type=INT64\""];
+    repeated OSMTag tags = 2 [(gogoproto.moretags) = "parquet:\"name=tags, type=LIST\""];
+	repeated WayPoint way_points = 3 [(gogoproto.customname) = "WayPoints", (gogoproto.jsontag) = "wayPoints", (gogoproto.moretags) = "parquet:\"name=wayPoints, type=LIST\""];
 }
 
 message OSMRelationMember {
-	int64 object_id = 1 [(gogoproto.customname) = "ObjectID", (gogoproto.jsontag) = "objectId"];
+	int64 object_id = 1 [(gogoproto.customname) = "ObjectID", (gogoproto.jsontag) = "objectId", (gogoproto.moretags) = "parquet:\"name=objectId, type=INT64\""];
 	enum OSMMemberType {
 		OSM_MEMBER_TYPE_UNKNOWN = 0;
 		OSM_MEMBER_TYPE_NODE = 1;
 		OSM_MEMBER_TYPE_WAY = 2;
 		OSM_MEMBER_TYPE_RELATION = 3;
 	}
-	OSMMemberType member_type = 2 [(gogoproto.customname) = "MemberType", (gogoproto.jsontag) = "memberType"];
-	string role = 3;
+	OSMMemberType member_type = 2 [(gogoproto.customname) = "MemberType", (gogoproto.jsontag) = "memberType", (gogoproto.moretags) = "parquet:\"name=memberType, type=INT32\""];
+	string role = 3 [(gogoproto.jsontag) = "role", (gogoproto.moretags) = "parquet:\"name=role, type=BYTE_ARRAY, convertedtype=UTF8\""];
 	enum OSMMemberOrientation {
 		OSM_MEMBER_ORIENTATION_UNKNOWN = 0;
 		OSM_MEMBER_ORIENTATION_CLOCKWISE = 1;
 		OSM_MEMBER_ORIENTATION_COUNTER_CLOCKWISE = 2;
 	}
-	OSMMemberOrientation orientation = 4;
+	OSMMemberOrientation orientation = 4 [(gogoproto.jsontag) = "orientation", (gogoproto.moretags) = "parquet:\"name=orientation, type=INT32\""];
 }
 
 message OSMRelation {
-	int64 id = 1 [(gogoproto.customname) = "ID"];
-	repeated OSMTag tags = 2;
-    repeated OSMRelationMember members = 3;
+	int64 id = 1 [(gogoproto.customname) = "ID", (gogoproto.moretags) = "parquet:\"name=id, type=INT64\""];
+	repeated OSMTag tags = 2 [(gogoproto.moretags) = "parquet:\"name=tags, type=LIST\""];
+    repeated OSMRelationMember members = 3 [(gogoproto.moretags) = "parquet:\"name=members, type=LIST\""];
 }
+
+// other types
 
 message IndexIDList {
 	repeated int64 ids = 1 [(gogoproto.customname) = "IDs"];

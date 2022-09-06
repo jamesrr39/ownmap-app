@@ -22,11 +22,11 @@ func (m *Message) Iterator(iter *Iterator) (*Iterator, error) {
 		iter = &Iterator{}
 	}
 	iter.base = base{
-		data:  m.data[m.index : m.index+l],
-		index: 0,
+		Data:  m.Data[m.Index : m.Index+l],
+		Index: 0,
 	}
 	iter.fieldNumber = m.fieldNumber
-	m.index += l
+	m.Index += l
 
 	return iter, nil
 }
@@ -36,7 +36,33 @@ func (m *Message) Iterator(iter *Iterator) (*Iterator, error) {
 // This method does NOT need to be called, reading a value automatically
 // moves in the index forward. This behavior is different than Message.Next().
 func (i *Iterator) HasNext() bool {
-	return i.base.index < len(i.base.data)
+	return i.base.Index < len(i.base.Data)
+}
+
+// Skip will move the interator forward 'count' value(s) without actually reading it.
+// Must provide the correct wireType. For a new iterator 'count' will move the
+// pointer so the next value call with be the 'counth' value.
+// double, float, fixed, sfixed are WireType32bit or WireType64bit,
+// all others int, uint, sint types are WireTypeVarint.
+// The function will panic for any other value.
+func (i *Iterator) Skip(wireType int, count int) {
+	if wireType == WireTypeVarint {
+		for j := 0; j < count; j++ {
+			for i.Data[i.Index] >= 128 {
+				i.Index++
+			}
+			i.Index++
+		}
+		return
+	} else if wireType == WireType32bit {
+		i.Index += 4 * count
+		return
+	} else if wireType == WireType64bit {
+		i.Index += 8 * count
+		return
+	}
+
+	panic("invalid wire type for a packed repeated field")
 }
 
 // Count returns the total number of values in this repeated field.
@@ -45,21 +71,21 @@ func (i *Iterator) HasNext() bool {
 // all others int, uint, sint types are WireTypeVarint.
 // The function will panic for any other value.
 func (i *Iterator) Count(wireType int) int {
-	if wireType == WireType32bit {
-		return len(i.base.data) / 4
-	}
-	if wireType == WireType64bit {
-		return len(i.base.data) / 8
-	}
 	if wireType == WireTypeVarint {
 		var count int
-		for _, b := range i.data {
+		for _, b := range i.Data {
 			if b < 128 {
 				count++
 			}
 		}
 
 		return count
+	}
+	if wireType == WireType32bit {
+		return len(i.base.Data) / 4
+	}
+	if wireType == WireType64bit {
+		return len(i.base.Data) / 8
 	}
 
 	panic("invalid wire type for a packed repeated field")

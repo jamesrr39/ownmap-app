@@ -1,7 +1,6 @@
 package geojson
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/paulmach/orb"
@@ -50,14 +49,14 @@ func (f Feature) MarshalJSON() ([]byte, error) {
 		jf.Properties = nil
 	}
 
-	return json.Marshal(jf)
+	return marshalJSON(jf)
 }
 
 // UnmarshalFeature decodes the data into a GeoJSON feature.
 // Alternately one can call json.Unmarshal(f) directly for the same result.
 func UnmarshalFeature(data []byte) (*Feature, error) {
 	f := &Feature{}
-	err := json.Unmarshal(data, f)
+	err := f.UnmarshalJSON(data)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +68,7 @@ func UnmarshalFeature(data []byte) (*Feature, error) {
 // into the orb.Geometry types.
 func (f *Feature) UnmarshalJSON(data []byte) error {
 	jf := &jsonFeature{}
-	err := json.Unmarshal(data, &jf)
+	err := unmarshalJSON(data, &jf)
 	if err != nil {
 		return err
 	}
@@ -78,8 +77,12 @@ func (f *Feature) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("geojson: not a feature: type=%s", jf.Type)
 	}
 
-	if jf.Geometry == nil || (jf.Geometry.Coordinates == nil && jf.Geometry.Geometries == nil) {
-		return ErrInvalidGeometry
+	var g orb.Geometry
+	if jf.Geometry != nil {
+		if jf.Geometry.Coordinates == nil && jf.Geometry.Geometries == nil {
+			return ErrInvalidGeometry
+		}
+		g = jf.Geometry.Geometry()
 	}
 
 	*f = Feature{
@@ -87,7 +90,7 @@ func (f *Feature) UnmarshalJSON(data []byte) error {
 		Type:       jf.Type,
 		Properties: jf.Properties,
 		BBox:       jf.BBox,
-		Geometry:   jf.Geometry.Geometry(),
+		Geometry:   g,
 	}
 
 	return nil

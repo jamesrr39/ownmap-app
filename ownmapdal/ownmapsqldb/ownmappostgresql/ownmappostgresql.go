@@ -67,7 +67,7 @@ CREATE TABLE dataset_info (
 	replication_time TIMESTAMP WITHOUT TIME ZONE
 )`
 
-func NewImporter(connStr string, pbfHeader *osmpbf.Header) (ownmapdal.Importer, errorsx.Error) {
+func NewFinalStorage(connStr string, pbfHeader *osmpbf.Header) (ownmapdal.Importer, errorsx.Error) {
 	db, err := sqlx.Open("postgres", "postgresql://"+connStr)
 	if err != nil {
 		return nil, errorsx.Wrap(err)

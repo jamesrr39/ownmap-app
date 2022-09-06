@@ -12,7 +12,6 @@ import (
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/fonts"
 	"github.com/jamesrr39/ownmap-app/ownmap"
-	"github.com/jamesrr39/ownmap-app/ownmapdal"
 	"github.com/jamesrr39/ownmap-app/styling"
 	"github.com/paulmach/osm"
 	"github.com/stretchr/testify/assert"
@@ -88,7 +87,6 @@ func TestRasterRenderer_RenderTextTile(t *testing.T) {
 	type fields struct {
 		font     *truetype.Font
 		fontSize int
-		readDAL  ownmapdal.ReadDAL
 	}
 	type args struct {
 		size image.Rectangle
@@ -106,7 +104,6 @@ func TestRasterRenderer_RenderTextTile(t *testing.T) {
 			fields{
 				font:     fonts.DefaultFont(),
 				fontSize: 72,
-				readDAL:  nil,
 			},
 			args{
 				size: image.Rect(0, 0, 128, 40),
@@ -135,7 +132,6 @@ func TestRasterRenderer_drawPlace(t *testing.T) {
 	type fields struct {
 		font     *truetype.Font
 		fontSize int
-		readDAL  ownmapdal.ReadDAL
 	}
 	type args struct {
 		img    *image.RGBA
@@ -151,7 +147,7 @@ func TestRasterRenderer_drawPlace(t *testing.T) {
 	}{
 		{
 			"pos lat, pos lon",
-			fields{fonts.DefaultFont(), 72, nil},
+			fields{fonts.DefaultFont(), 72},
 			args{
 				image.NewRGBA(image.Rect(0, 0, 256, 256)),
 				osm.Bounds{MaxLat: 1, MinLat: 0, MaxLon: 1, MinLon: 0},
@@ -171,7 +167,7 @@ func TestRasterRenderer_drawPlace(t *testing.T) {
 		},
 		{
 			"pos lat, neg lon",
-			fields{fonts.DefaultFont(), 72, nil},
+			fields{fonts.DefaultFont(), 72},
 			args{
 				image.NewRGBA(image.Rect(0, 0, 256, 256)),
 				osm.Bounds{MaxLat: 1, MinLat: 0, MaxLon: 0, MinLon: -1},
@@ -191,7 +187,7 @@ func TestRasterRenderer_drawPlace(t *testing.T) {
 		},
 		{
 			"neg lat, pos lon",
-			fields{fonts.DefaultFont(), 72, nil},
+			fields{fonts.DefaultFont(), 72},
 			args{
 				image.NewRGBA(image.Rect(0, 0, 256, 256)),
 				osm.Bounds{MaxLat: 0, MinLat: -1, MaxLon: 1, MinLon: 0},
@@ -211,7 +207,7 @@ func TestRasterRenderer_drawPlace(t *testing.T) {
 		},
 		{
 			"neg lat, neg lon",
-			fields{fonts.DefaultFont(), 72, nil},
+			fields{fonts.DefaultFont(), 72},
 			args{
 				image.NewRGBA(image.Rect(0, 0, 256, 256)),
 				osm.Bounds{MaxLat: 0, MinLat: -1, MaxLon: 0, MinLon: -1},

@@ -13,6 +13,15 @@ func (m *DatasetInfo_Bounds) ToOSMBounds() osm.Bounds {
 	}
 }
 
+func OSMBoundsToDatasetInfoBounds(osmBounds osm.Bounds) *DatasetInfo_Bounds {
+	return &DatasetInfo_Bounds{
+		MaxLat: osmBounds.MaxLat,
+		MaxLon: osmBounds.MaxLon,
+		MinLat: osmBounds.MinLat,
+		MinLon: osmBounds.MinLon,
+	}
+}
+
 type OSMObject interface {
 	OSMObjectID() int64
 	GetTags() []*OSMTag // "GetTags" is a protoc-generated method (Tags() is not)

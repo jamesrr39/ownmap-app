@@ -6,19 +6,11 @@ import (
 
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/jamesrr39/ownmap-app/ownmap"
-	"github.com/paulmach/osm"
 )
 
 var (
 	ErrNoDataAvailable = errors.New("no data available")
 )
-
-type ReadDAL interface {
-	GetInBounds(dataSourceConn DataSourceConn, bounds osm.Bounds, filter *GetInBoundsFilter) (NodeOccurenceMap, WayOccurenceMap, errorsx.Error)
-	GetNodeMapFromTagOccurences(dataSourceConn DataSourceConn, tagOccurenceMap NodeOccurenceMap) (TagNodeMap, errorsx.Error)
-	GetWayMapFromTagOccurences(dataSourceConn DataSourceConn, tagOccurenceMap WayOccurenceMap) (TagWayMap, errorsx.Error)
-	GetDatasetInfo(dataSourceConn DataSourceConn) (*ownmap.DatasetInfo, errorsx.Error)
-}
 
 type TagNodeMap map[ownmap.TagKey][]*ownmap.OSMNode
 
@@ -53,6 +45,7 @@ type DBFileType string
 const (
 	DBFileTypeMapmakerDB DBFileType = "ownmapdb"
 	DBFileTypePostgresql DBFileType = "postgresql"
+	DBFileTypeParquet    DBFileType = "parquet"
 )
 
 type DBFileConnectionURL struct {
