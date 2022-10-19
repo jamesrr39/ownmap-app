@@ -71,7 +71,7 @@ func TestLogicalFilter_ShouldColumnBeScanned(t *testing.T) {
 	}
 }
 
-func TestLogicalFilter_ScanRowGroup(t *testing.T) {
+func TestLogicalFilter_ScanRowGroup_oneCol(t *testing.T) {
 	var err error
 
 	f, err := pqetestutil.EnsureTestFile()
@@ -122,8 +122,68 @@ func TestLogicalFilter_ScanRowGroup(t *testing.T) {
 		20: {Lat: 12, Lon: -12},
 	}
 
-	require.Len(t, rowGroupValues, 11)
+	require.Len(t, rowGroupValues, len(expectedResults))
 	for rowGroupIdx, resultRow := range rowGroupValues {
 		assert.Equal(t, expectedResults[rowGroupIdx].Lat, resultRow.values["Lat"])
+	}
+
+}
+
+func TestLogicalFilter_ScanRowGroup_twoCols(t *testing.T) {
+	var err error
+
+	f, err := pqetestutil.EnsureTestFile()
+	require.NoError(t, err)
+	defer f.Close()
+
+	parquetReader, err := reader.NewParquetReader(f, pqetestutil.OsmNodesSchema, int64(runtime.NumCPU()))
+	require.NoError(t, err)
+
+	filter := &LogicalFilter{
+		Operator: LogicalFilterOperatorAnd,
+		ChildFilters: []Filter{
+			&ComparativeFilter{
+				FieldName: "Lat",
+				Operator:  ComparativeOperatorGreaterThanOrEqualTo,
+				Operand:   Float64Operand(11),
+			},
+			&ComparativeFilter{
+				FieldName: "Lat",
+				Operator:  ComparativeOperatorLessThanOrEqualTo,
+				Operand:   Float64Operand(11.3),
+			},
+			&ComparativeFilter{
+				FieldName: "Lon",
+				Operator:  ComparativeOperatorGreaterThanOrEqualTo,
+				Operand:   Float64Operand(-11.2),
+			},
+			&ComparativeFilter{
+				FieldName: "Lon",
+				Operator:  ComparativeOperatorLessThanOrEqualTo,
+				Operand:   Float64Operand(-11.1),
+			},
+		},
+	}
+
+	queryRunner := newQueryRunnerType()
+	rowGroupValues := make(rowGroupValuesCollectionType)
+	err = filter.ScanRowGroup(parquetReader.Footer.RowGroups[0], parquetReader, queryRunner, rowGroupValues, "Parquet_go_root")
+	require.NoError(t, err)
+
+	type expectedResultType struct {
+		Lat float64
+		Lon float64
+	}
+
+	// map[rowGroupIndex]expectedResult
+	expectedResults := map[int]expectedResultType{
+		11: {Lat: 11.1, Lon: -11.1},
+		12: {Lat: 11.2, Lon: -11.2},
+	}
+
+	require.Len(t, rowGroupValues, len(expectedResults))
+	for rowGroupIdx, resultRow := range rowGroupValues {
+		assert.Equal(t, expectedResults[rowGroupIdx].Lat, resultRow.values["Lat"])
+		assert.Equal(t, expectedResults[rowGroupIdx].Lon, resultRow.values["Lon"])
 	}
 }

@@ -35,26 +35,27 @@ func (lf *LogicalFilter) ScanRowGroup(
 	rowGroupValues rowGroupValuesCollectionType,
 	rootSchemaElementName string,
 ) errorsx.Error {
-	var subRowGroupValuesList []rowGroupValuesCollectionType
+	var childFilterReturnedValuesList []rowGroupValuesCollectionType
 	for _, childFilter := range lf.ChildFilters {
-
 		subRowGroupValues := make(rowGroupValuesCollectionType)
 		err := childFilter.ScanRowGroup(rowGroup, parquetReader, queryRunner, subRowGroupValues, rootSchemaElementName)
 		if err != nil {
 			return err
 		}
 
-		subRowGroupValuesList = append(subRowGroupValuesList, subRowGroupValues)
+		childFilterReturnedValuesList = append(childFilterReturnedValuesList, subRowGroupValues)
 	}
 
 	switch lf.Operator {
 	case LogicalFilterOperatorAnd:
-		firstSubRowGroupValuesList := subRowGroupValuesList[0]
-		otherRowGroupValuesList := subRowGroupValuesList[1:]
-		for i, val := range firstSubRowGroupValuesList {
+		masterMap := childFilterReturnedValuesList[0]
+		otherMaps := childFilterReturnedValuesList[1:]
+		// go through each row in the master map, and see if it is in all the maps
+		for rowID, val := range masterMap {
+
 			var skipRow bool
-			for _, otherRowGroup := range otherRowGroupValuesList {
-				otherValWrapper, ok := otherRowGroup[i]
+			for _, otherRowGroup := range otherMaps {
+				otherValWrapper, ok := otherRowGroup[rowID]
 				if !ok {
 					// not in other row group, so row doesn't satisfy AND operator
 					skipRow = true
@@ -66,11 +67,12 @@ func (lf *LogicalFilter) ScanRowGroup(
 				}
 			}
 
+			// we do not need this row, so skip it
 			if skipRow {
 				continue
 			}
 
-			rowGroupValues[i] = val
+			rowGroupValues[rowID] = val
 		}
 	default:
 		return errorsx.Errorf("operator %q not supported", lf.Operator)

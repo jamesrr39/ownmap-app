@@ -42,6 +42,7 @@ type rowMapType struct {
 	values rowValuesMap
 }
 
+// map[rowIdx]*rowMapType
 type rowGroupValuesCollectionType map[int]*rowMapType
 
 type valueType interface{}
@@ -230,18 +231,29 @@ func rowGroupValuesToResults(rowGroupValues rowGroupValuesCollectionType, select
 // 	return nil
 // }
 
-func getColumnIndexesToScan(parquetReader *reader.ParquetReader, selectCol, rootSchemaElementName string) ([]int64, errorsx.Error) {
+func getColumnIndexesToScan(parquetReader *reader.ParquetReader, selectCol, rootSchemaElementName string) ([]string, errorsx.Error) {
 	fullPath := common.PathToStr([]string{rootSchemaElementName, selectCol})
 
-	colIdx := parquetReader.SchemaHandler.MapIndex[fullPath]
+	colIdx := int64(parquetReader.SchemaHandler.MapIndex[fullPath])
 	schemaElement := parquetReader.SchemaHandler.SchemaElements[colIdx]
-	log.Printf("schemaElement: %#v\n", schemaElement)
+	log.Printf("select col: %q, schemaElement: %#v\n\n%#v\n",
+		selectCol,
+		schemaElement,
+		parquetReader.SchemaHandler.ValueColumns,
+	)
+
+	isDirectlyEncodedType := schemaElement.Type != nil
+	if isDirectlyEncodedType {
+		return []string{fullPath}, nil
+	}
 
 	if schemaElement.ConvertedType == nil {
 		return nil, errorsx.Errorf("unhandled converted type: nil")
 	}
 
-	switch *schemaElement.ConvertedType {
+	convertedType := *schemaElement.ConvertedType
+	// TODO: schemaElement.GetLogicalType()
+	switch convertedType {
 	case
 		parquet.ConvertedType_UINT_8,
 		parquet.ConvertedType_UINT_16,
@@ -251,9 +263,37 @@ func getColumnIndexesToScan(parquetReader *reader.ParquetReader, selectCol, root
 		parquet.ConvertedType_INT_16,
 		parquet.ConvertedType_INT_32,
 		parquet.ConvertedType_INT_64:
-		return []int64{int64(colIdx)}, nil
+		return []string{fullPath}, nil
 	case parquet.ConvertedType_UTF8:
-		return []int64{int64(colIdx)}, nil
+		return []string{fullPath}, nil
+	case parquet.ConvertedType_MAP:
+		numChildren := schemaElement.GetNumChildren()
+		if numChildren != 1 {
+			panic("numChildren not 1")
+		}
+
+		childSchemaElement := parquetReader.SchemaHandler.SchemaElements[colIdx+1]
+		childNumChildren := childSchemaElement.GetNumChildren()
+		if childNumChildren != 2 {
+			panic("childNumChildren not 2")
+		}
+
+		keySchemaElement := parquetReader.SchemaHandler.SchemaElements[colIdx+2]
+		keyNumChildren := keySchemaElement.GetNumChildren()
+		if keyNumChildren != 0 {
+			return nil, errorsx.Wrap(errorsx.Errorf("keyNumChildren not 1"), "num", keyNumChildren, "keyname", keySchemaElement.Name)
+		}
+
+		valSchemaElement := parquetReader.SchemaHandler.SchemaElements[colIdx+3]
+		valNumChildren := valSchemaElement.GetNumChildren()
+		if valNumChildren != 0 {
+			return nil, errorsx.Wrap(errorsx.Errorf("valNumChildren not 1"), "num", valNumChildren, "valname", valSchemaElement.Name)
+		}
+
+		return []string{
+			common.PathToStr([]string{fullPath, childSchemaElement.Name, keySchemaElement.Name}),
+			common.PathToStr([]string{fullPath, childSchemaElement.Name, valSchemaElement.Name}),
+		}, nil
 	default:
 		return nil, errorsx.Errorf("unhandled converted type: %s", schemaElement.ConvertedType)
 	}
@@ -266,16 +306,16 @@ func addColumnValsToRowGroupValues(parquetReader *reader.ParquetReader, rowGroup
 	log.Printf("rootEx: %s, rootIn: %s\n", parquetReader.SchemaHandler.GetRootExName(), parquetReader.SchemaHandler.GetRootInName())
 	// log.Printf("mapIndex: %#v\n", parquetReader.SchemaHandler.MapIndex)
 
-	colIdxs, err := getColumnIndexesToScan(parquetReader, selectCol, rootSchemaElementName)
+	colPaths, err := getColumnIndexesToScan(parquetReader, selectCol, rootSchemaElementName)
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
 
-	for _, colIdx := range colIdxs {
+	for _, colPath := range colPaths {
 		// definition levels = how many optional fields are in the path for a given field
-		vals, repetionLevels, definitionLevels, err := parquetReader.ReadColumnByIndex(colIdx, rowGroup.GetNumRows())
+		vals, repetionLevels, definitionLevels, err := parquetReader.ReadColumnByPath(colPath, rowGroup.GetNumRows())
 		if err != nil {
-			return errorsx.Wrap(err)
+			return errorsx.Wrap(err, "colPath", colPaths)
 		}
 
 		println("dl:", len(definitionLevels))
