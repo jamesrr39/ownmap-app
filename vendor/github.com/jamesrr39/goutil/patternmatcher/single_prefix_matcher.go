@@ -1,4 +1,4 @@
-package excludesmatcher
+package patternmatcher
 
 import (
 	"strings"

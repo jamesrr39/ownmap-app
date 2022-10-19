@@ -45,6 +45,14 @@ func (err *Err) Error() string {
 	return s
 }
 
+// ErrWithStack returns a std-lib error with the stack trace, if an error was passed in.
+func ErrWithStack(err Error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("Error: %s\nStack:\n%s\n", err.Error(), err.Stack())
+}
+
 // GoString implements the GoStringer interface,
 // and so is printed with the %#v fmt directive.
 // See https://golang.org/pkg/fmt/ for more details.
@@ -68,7 +76,13 @@ func Wrap(err error, kvPairs ...interface{}) Error {
 	kvPairsMap := make(kvPairsMapType)
 	for i := 0; i < len(kvPairs); i = i + 2 {
 		k := kvPairs[i]
-		v := kvPairs[i+1]
+
+		var v interface{}
+		if len(kvPairs) >= i+2 {
+			v = kvPairs[i+1]
+		} else {
+			v = "[empty]"
+		}
 		kvPairsMap[k] = v
 	}
 

@@ -9,7 +9,7 @@ require (
 	github.com/golang/freetype v0.0.0-20170609003504-e2365dfdc4a0
 	github.com/jamesrr39/go-snapshot-testing v0.0.0-20210417135521-a5ca70c087bc
 	github.com/jamesrr39/go-tracing v0.0.0-20210422154132-7e243ee015ee
-	github.com/jamesrr39/goutil v0.0.0-20210417135610-f7ebfe4dda4d
+	github.com/jamesrr39/goutil v0.0.0-20220816121553-59b795852c3b
 	github.com/jamesrr39/semaphore v0.0.0-20180521202200-0d5ddc396086
 	github.com/jmoiron/sqlx v1.3.1
 	github.com/lib/pq v1.10.4

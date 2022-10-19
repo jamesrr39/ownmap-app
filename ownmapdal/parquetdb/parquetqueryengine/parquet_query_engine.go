@@ -1,6 +1,7 @@
 package parquetqueryengine
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"github.com/paulmach/osm"
 	"github.com/xitongsys/parquet-go/common"
 	"github.com/xitongsys/parquet-go/parquet"
+	"github.com/xitongsys/parquet-go/reader"
 )
 
 type ParquetReader interface {
@@ -25,8 +27,19 @@ type Query struct {
 
 type fieldNameType string
 
+type rowValuesMap map[fieldNameType]interface{}
+
+func (m rowValuesMap) String() string {
+	b, err := json.Marshal(m)
+	if err != nil {
+		panic(err)
+	}
+
+	return string(b)
+}
+
 type rowMapType struct {
-	values map[fieldNameType]interface{}
+	values rowValuesMap
 }
 
 type rowGroupValuesCollectionType map[int]*rowMapType
@@ -82,7 +95,7 @@ func (q *Query) isRowGroupInteresting(rowGroup *parquet.RowGroup) (bool, errorsx
 	}
 }
 
-func (q *Query) Run(parquetReader ParquetReader, rowGroups []*parquet.RowGroup, rootSchemaElementName string) ([]*ResultRow, errorsx.Error) {
+func (q *Query) Run(parquetReader *reader.ParquetReader, rowGroups []*parquet.RowGroup, rootSchemaElementName string) ([]*ResultRow, errorsx.Error) {
 	fieldNamesWantedForWhereClause := make(map[string]struct{})
 	comparativeFilters := q.Where.GetComparativeFilters()
 	for _, comparativeFilter := range comparativeFilters {
@@ -133,6 +146,8 @@ func (q *Query) Run(parquetReader ParquetReader, rowGroups []*parquet.RowGroup, 
 			log.Printf("rowID: %d, values: %#v\n", rowID, rowMap.values)
 		}
 
+		println("3 building column names:::")
+
 		// 3. now scan SELECT columns
 		whereColMap := q.Where.BuildColumnNamesWanted()
 		for _, selectCol := range q.Select {
@@ -141,13 +156,14 @@ func (q *Query) Run(parquetReader ParquetReader, rowGroups []*parquet.RowGroup, 
 				// column has already been scanned in WHERE clause
 				continue
 			}
-
+			println("3.5 select coladding :::", selectCol)
 			err = addColumnValsToRowGroupValues(parquetReader, rowGroup, rowGroupValues, selectCol, rootSchemaElementName)
 			if err != nil {
 				return nil, err
 			}
 		}
 
+		println("4 built column names:::")
 		rowGroupResults := rowGroupValuesToResults(rowGroupValues, q.Select)
 
 		results = append(results, rowGroupResults...)
@@ -214,33 +230,79 @@ func rowGroupValuesToResults(rowGroupValues rowGroupValuesCollectionType, select
 // 	return nil
 // }
 
-func addColumnValsToRowGroupValues(parquetReader ParquetReader, rowGroup *parquet.RowGroup, rowGroupValues rowGroupValuesCollectionType, selectCol, rootSchemaElementName string) errorsx.Error {
+func getColumnIndexesToScan(parquetReader *reader.ParquetReader, selectCol, rootSchemaElementName string) ([]int64, errorsx.Error) {
 	fullPath := common.PathToStr([]string{rootSchemaElementName, selectCol})
+
+	colIdx := parquetReader.SchemaHandler.MapIndex[fullPath]
+	schemaElement := parquetReader.SchemaHandler.SchemaElements[colIdx]
+	log.Printf("schemaElement: %#v\n", schemaElement)
+
+	if schemaElement.ConvertedType == nil {
+		return nil, errorsx.Errorf("unhandled converted type: nil")
+	}
+
+	switch *schemaElement.ConvertedType {
+	case
+		parquet.ConvertedType_UINT_8,
+		parquet.ConvertedType_UINT_16,
+		parquet.ConvertedType_UINT_32,
+		parquet.ConvertedType_UINT_64,
+		parquet.ConvertedType_INT_8,
+		parquet.ConvertedType_INT_16,
+		parquet.ConvertedType_INT_32,
+		parquet.ConvertedType_INT_64:
+		return []int64{int64(colIdx)}, nil
+	case parquet.ConvertedType_UTF8:
+		return []int64{int64(colIdx)}, nil
+	default:
+		return nil, errorsx.Errorf("unhandled converted type: %s", schemaElement.ConvertedType)
+	}
+}
+
+func addColumnValsToRowGroupValues(parquetReader *reader.ParquetReader, rowGroup *parquet.RowGroup, rowGroupValues rowGroupValuesCollectionType, selectCol, rootSchemaElementName string) errorsx.Error {
+
 	// fullPath := strings.Join([]string{rootSchemaElementName, selectCol}, ".")
 	// fullPath := selectCol
-
+	log.Printf("rootEx: %s, rootIn: %s\n", parquetReader.SchemaHandler.GetRootExName(), parquetReader.SchemaHandler.GetRootInName())
 	// log.Printf("mapIndex: %#v\n", parquetReader.SchemaHandler.MapIndex)
 
-	vals, repetionLevels, definitionLevels, err := parquetReader.ReadColumnByPath(fullPath, rowGroup.GetNumRows())
+	colIdxs, err := getColumnIndexesToScan(parquetReader, selectCol, rootSchemaElementName)
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
 
-	for i, val := range vals {
-		if repetionLevels[i] != 0 {
-			panic("not handled: repetionLevels")
-		}
-		if definitionLevels[i] != 0 {
-			panic("not handled: definitionLevels")
-		}
-
-		existingVals, wanted := rowGroupValues[i]
-		if !wanted {
-			// TODO skip row instead of reading all
-			continue
+	for _, colIdx := range colIdxs {
+		// definition levels = how many optional fields are in the path for a given field
+		vals, repetionLevels, definitionLevels, err := parquetReader.ReadColumnByIndex(colIdx, rowGroup.GetNumRows())
+		if err != nil {
+			return errorsx.Wrap(err)
 		}
 
-		existingVals.values[fieldNameType(selectCol)] = val
+		println("dl:", len(definitionLevels))
+
+		var rowIdx int
+		for i, val := range vals {
+			// definitionLevel := definitionLevels[i]
+			repetionLevel := repetionLevels[i]
+			advanceRowIndex := true
+
+			if repetionLevel != 0 {
+				advanceRowIndex = false
+			}
+			// if definitionLevel != 0 {
+			// 	println("dl::", definitionLevel)
+			// 	panic("not handled: definitionLevels. selectCol" + selectCol)
+			// }
+
+			existingVals, wanted := rowGroupValues[rowIdx]
+			if wanted {
+				existingVals.values[fieldNameType(selectCol)] = val
+			}
+
+			if advanceRowIndex {
+				rowIdx++
+			}
+		}
 	}
 
 	return nil

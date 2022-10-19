@@ -1,4 +1,4 @@
-package excludesmatcher
+package patternmatcher
 
 import (
 	"bufio"
@@ -8,14 +8,14 @@ import (
 	"github.com/gobwas/glob"
 )
 
-// ExcludesMatcher is a type that matches file names against excluded names
-type ExcludesMatcher struct {
+// PatternMatcher is a type that matches file names against excluded names
+type PatternMatcher struct {
 	globs    []glob.Glob
 	dirGlobs []glob.Glob
 }
 
-// NewExcludesMatcherFromReader creates a new ExcludesMatcher from a reader
-func NewExcludesMatcherFromReader(reader io.Reader) (*ExcludesMatcher, error) {
+// NewMatcherFromReader creates a new ExcludesMatcher from a reader
+func NewMatcherFromReader(reader io.Reader) (*PatternMatcher, error) {
 	var matcherPatterns []glob.Glob
 	var dirGlobs []glob.Glob
 
@@ -47,14 +47,14 @@ func NewExcludesMatcherFromReader(reader io.Reader) (*ExcludesMatcher, error) {
 		matcherPatterns = append(matcherPatterns, matcher)
 	}
 
-	return &ExcludesMatcher{
+	return &PatternMatcher{
 		globs:    matcherPatterns,
 		dirGlobs: dirGlobs,
 	}, nil
 }
 
 // Matches tests whether a line matches one of the patterns to be excluded
-func (e *ExcludesMatcher) Matches(path string) bool {
+func (e *PatternMatcher) Matches(path string) bool {
 	for _, matcherGlob := range e.globs {
 		doesMatch := matcherGlob.Match(string(path))
 

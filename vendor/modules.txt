@@ -70,21 +70,21 @@ github.com/jamesrr39/go-snapshot-testing
 # github.com/jamesrr39/go-tracing v0.0.0-20210422154132-7e243ee015ee
 ## explicit; go 1.16
 github.com/jamesrr39/go-tracing
-# github.com/jamesrr39/goutil v0.0.0-20210417135610-f7ebfe4dda4d
-## explicit
+# github.com/jamesrr39/goutil v0.0.0-20220816121553-59b795852c3b
+## explicit; go 1.16
 github.com/jamesrr39/goutil/algorithms
 github.com/jamesrr39/goutil/binaryx
 github.com/jamesrr39/goutil/bolt-tools/boltviz
 github.com/jamesrr39/goutil/colorextra
 github.com/jamesrr39/goutil/dirtraversal
 github.com/jamesrr39/goutil/errorsx
-github.com/jamesrr39/goutil/excludesmatcher
 github.com/jamesrr39/goutil/gofs
 github.com/jamesrr39/goutil/gofs/mockfs
 github.com/jamesrr39/goutil/httpextra
 github.com/jamesrr39/goutil/humanise
 github.com/jamesrr39/goutil/logpkg
 github.com/jamesrr39/goutil/open
+github.com/jamesrr39/goutil/patternmatcher
 github.com/jamesrr39/goutil/streamtostorage
 github.com/jamesrr39/goutil/userextra
 github.com/jamesrr39/goutil/validation

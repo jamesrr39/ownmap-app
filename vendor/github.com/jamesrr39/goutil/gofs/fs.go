@@ -2,6 +2,7 @@ package gofs
 
 import (
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"os"
 )
@@ -104,4 +105,12 @@ func (fs *OsFs) Chmod(name string, mode os.FileMode) error {
 }
 func (fs *OsFs) Readlink(path string) (string, error) {
 	return os.Readlink(path)
+}
+
+func IsSymlink(fileMode fs.FileMode) bool {
+	if fileMode&fs.ModeSymlink == 1 {
+		return false
+	}
+
+	return true
 }

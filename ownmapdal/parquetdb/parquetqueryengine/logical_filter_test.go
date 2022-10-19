@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/ownmap-app/ownmapdal/parquetdb/parquetqueryengine/pqetestutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/xitongsys/parquet-go-source/local"
 	"github.com/xitongsys/parquet-go/encoding"
 	"github.com/xitongsys/parquet-go/parquet"
 	"github.com/xitongsys/parquet-go/reader"
@@ -74,14 +74,11 @@ func TestLogicalFilter_ShouldColumnBeScanned(t *testing.T) {
 func TestLogicalFilter_ScanRowGroup(t *testing.T) {
 	var err error
 
-	err = ensureTestFile()
-	require.NoError(t, err)
-
-	f, err := local.NewLocalFileReader(testFilename)
+	f, err := pqetestutil.EnsureTestFile()
 	require.NoError(t, err)
 	defer f.Close()
 
-	parquetReader, err := reader.NewParquetReader(f, osmNodesSchema, int64(runtime.NumCPU()))
+	parquetReader, err := reader.NewParquetReader(f, pqetestutil.OsmNodesSchema, int64(runtime.NumCPU()))
 	require.NoError(t, err)
 
 	filter := &LogicalFilter{
