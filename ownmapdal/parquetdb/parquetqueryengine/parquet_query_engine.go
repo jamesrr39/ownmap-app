@@ -231,11 +231,23 @@ func rowGroupValuesToResults(rowGroupValues rowGroupValuesCollectionType, select
 // 	return nil
 // }
 
-func getColumnIndexesToScan(parquetReader *reader.ParquetReader, selectCol, rootSchemaElementName string) ([]string, errorsx.Error) {
-	fullPath := common.PathToStr([]string{rootSchemaElementName, selectCol})
+func getSchemaElement(parquetReader *reader.ParquetReader, columnName string) *parquet.SchemaElement {
+	fullPath := common.PathToStr([]string{parquetReader.SchemaHandler.GetRootInName(), columnName})
 
 	colIdx := int64(parquetReader.SchemaHandler.MapIndex[fullPath])
 	schemaElement := parquetReader.SchemaHandler.SchemaElements[colIdx]
+
+	return schemaElement
+}
+
+func getColumnIndexesToScan(parquetReader *reader.ParquetReader, selectCol, rootSchemaElementName string) ([]string, errorsx.Error) {
+
+	fullPath := common.PathToStr([]string{parquetReader.SchemaHandler.GetRootInName(), selectCol})
+
+	colIdx := int64(parquetReader.SchemaHandler.MapIndex[fullPath])
+
+	schemaElement := getSchemaElement(parquetReader, selectCol)
+
 	log.Printf("select col: %q, schemaElement: %#v\n\n%#v\n",
 		selectCol,
 		schemaElement,
@@ -300,7 +312,7 @@ func getColumnIndexesToScan(parquetReader *reader.ParquetReader, selectCol, root
 }
 
 func addColumnValsToRowGroupValues(parquetReader *reader.ParquetReader, rowGroup *parquet.RowGroup, rowGroupValues rowGroupValuesCollectionType, selectCol, rootSchemaElementName string) errorsx.Error {
-
+	schemaElement := getSchemaElement(parquetReader, selectCol)
 	// fullPath := strings.Join([]string{rootSchemaElementName, selectCol}, ".")
 	// fullPath := selectCol
 	log.Printf("rootEx: %s, rootIn: %s\n", parquetReader.SchemaHandler.GetRootExName(), parquetReader.SchemaHandler.GetRootInName())
@@ -310,6 +322,8 @@ func addColumnValsToRowGroupValues(parquetReader *reader.ParquetReader, rowGroup
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
+
+	log.Printf("columnIndexesToScan: %q\n", colPaths)
 
 	for _, colPath := range colPaths {
 		// definition levels = how many optional fields are in the path for a given field
@@ -329,10 +343,10 @@ func addColumnValsToRowGroupValues(parquetReader *reader.ParquetReader, rowGroup
 			if repetionLevel != 0 {
 				advanceRowIndex = false
 			}
-			// if definitionLevel != 0 {
-			// 	println("dl::", definitionLevel)
-			// 	panic("not handled: definitionLevels. selectCol" + selectCol)
-			// }
+
+			if len(colPaths) > 1 {
+				panic("unhandled map/list")
+			}
 
 			existingVals, wanted := rowGroupValues[rowIdx]
 			if wanted {

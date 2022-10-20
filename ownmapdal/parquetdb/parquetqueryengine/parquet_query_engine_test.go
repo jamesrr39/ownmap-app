@@ -38,7 +38,7 @@ func Test_Run(t *testing.T) {
 					&ComparativeFilter{
 						FieldName: "Lon",
 						Operator:  ComparativeOperatorLessThan,
-						Operand:   Float64Operand(-10.05),
+						Operand:   Float64Operand(-10.15),
 					},
 				},
 			},
