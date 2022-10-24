@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jamesrr39/goutil/errorsx"
+	"github.com/jamesrr39/goutil/gofs"
 	"github.com/jamesrr39/ownmap-app/ownmap"
 	"github.com/jamesrr39/ownmap-app/ownmapdal"
 	"github.com/paulmach/osm/osmpbf"
@@ -33,7 +34,7 @@ func getFileNamesAndSchemas() []parquetFileType {
 	}
 }
 
-const datasetInfoFileName = "dataset_info.json"
+const DatasetInfoFileName = "dataset_info.json"
 
 var (
 	//go:embed nodes_schema.json
@@ -45,6 +46,7 @@ var (
 )
 
 type Importer struct {
+	fs                         gofs.Fs
 	dirPath                    string
 	nodesParquetWriterFile     *parquetwriter.JSONWriter
 	waysParquetWriterFile      *parquetwriter.JSONWriter
@@ -56,7 +58,7 @@ type Importer struct {
 	ReplicationTime            time.Time
 }
 
-func NewFinalStorage(dirPath string, pbfHeader *osmpbf.Header, rowGroupSize int64) (*Importer, errorsx.Error) {
+func NewFinalStorage(fs gofs.Fs, dirPath string, pbfHeader *osmpbf.Header, rowGroupSize int64) (*Importer, errorsx.Error) {
 	var writerFiles []*parquetwriter.JSONWriter
 	for _, fileNameAndSchema := range getFileNamesAndSchemas() {
 		f, err := local.NewLocalFileWriter(filepath.Join(dirPath, fileNameAndSchema.Name))
@@ -74,6 +76,7 @@ func NewFinalStorage(dirPath string, pbfHeader *osmpbf.Header, rowGroupSize int6
 	}
 
 	return &Importer{
+		fs,
 		dirPath,
 		writerFiles[0], writerFiles[1], writerFiles[2],
 		make(map[int64]*ownmap.OSMNode), make(map[int64]*ownmap.OSMWay), make(map[int64]*ownmap.OSMRelation),
@@ -108,7 +111,7 @@ func (i *Importer) GetRelationByID(id int64) (*ownmap.OSMRelation, error) {
 func (i *Importer) ImportNode(obj *ownmap.OSMNode) errorsx.Error {
 	i.nodeMap[obj.ID] = obj
 
-	j, err := json.Marshal(obj)
+	j, err := json.Marshal(NodeParquetFormat{obj, ownmap.TagListToTagMap(obj.Tags)})
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
@@ -123,7 +126,7 @@ func (i *Importer) ImportNode(obj *ownmap.OSMNode) errorsx.Error {
 func (i *Importer) ImportWay(obj *ownmap.OSMWay) errorsx.Error {
 	i.wayMap[obj.ID] = obj
 
-	j, err := json.Marshal(obj)
+	j, err := json.Marshal(WayParquetFormat{obj, ownmap.TagListToTagMap(obj.Tags)})
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
@@ -138,7 +141,7 @@ func (i *Importer) ImportWay(obj *ownmap.OSMWay) errorsx.Error {
 func (i *Importer) ImportRelation(obj *ownmap.OSMRelation) errorsx.Error {
 	i.relationMap[obj.ID] = obj
 
-	j, err := json.Marshal(obj)
+	j, err := json.Marshal(RelationParquetFormat{obj, ownmap.TagListToTagMap(obj.Tags)})
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
@@ -149,6 +152,21 @@ func (i *Importer) ImportRelation(obj *ownmap.OSMRelation) errorsx.Error {
 	}
 
 	return nil
+}
+
+type NodeParquetFormat struct {
+	*ownmap.OSMNode
+	Tags map[string]string `json:"tags"`
+}
+
+type WayParquetFormat struct {
+	*ownmap.OSMWay
+	Tags map[string]string `json:"tags"`
+}
+
+type RelationParquetFormat struct {
+	*ownmap.OSMRelation
+	Tags map[string]string `json:"tags"`
 }
 
 func (i *Importer) ImportNodes(objs []*ownmap.OSMNode) errorsx.Error {
@@ -198,7 +216,7 @@ func (i *Importer) Commit() (ownmapdal.DataSourceConn, errorsx.Error) {
 		ReplicationTimeMs: uint64(i.ReplicationTime.UnixNano() / (1000 * 1000)),
 	}
 
-	datasetInfoFile, err := os.Create(filepath.Join(i.dirPath, datasetInfoFileName))
+	datasetInfoFile, err := os.Create(filepath.Join(i.dirPath, DatasetInfoFileName))
 	if err != nil {
 		return nil, errorsx.Wrap(err)
 	}
@@ -208,7 +226,7 @@ func (i *Importer) Commit() (ownmapdal.DataSourceConn, errorsx.Error) {
 		return nil, errorsx.Wrap(err)
 	}
 
-	return NewParquetDatasource(i.dirPath)
+	return NewDuckDBDataSourceConn(i.fs, i.dirPath)
 }
 func (i *Importer) Rollback() errorsx.Error {
 	return errorsx.Errorf("unhandled: Rollback")

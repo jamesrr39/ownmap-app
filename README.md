@@ -21,11 +21,19 @@ Then run `make run_dev_import`. This will read the pbf file and create a `ownmap
 
 You can then run `make run_dev_server__basic_style`. This will start a web server. In the logs you can see the address that it is serving on. Open up a web browser and go to that address. You will see an interactive slippy map with tiles being served from your tileserver.
 
-### parquet
+### parquet: importing an OSM extract to parquet format
 
-DuckDB is a great tool to debug your parquet files with.
+The importer (to parquet) is
 
-Install it, and then change directory in the terminal to the directory where you have the parquet files. Then run `duckdb` and try out these example queries:
+#### libduckdb
+
+You need to install the shared object for `duckdb` to use the parquet reader (for now). You can do this but downloading it from the [duckdb installation page](https://duckdb.org/docs/installation/) and then putting it in one of the directories that the linker will look for it.
+
+On Linux you can choose from the directories in the output of `ld -lduckdb --verbose`.
+
+You can also install the `duckdb` application to interactively query the resulting parquet file.
+
+To do this, install it, and then change directory in the terminal to the directory where you have the parquet files. Then run `duckdb` and try out these example queries:
 
 ```
 -- Look at how duckdb views the files
@@ -52,11 +60,12 @@ SELECT * FROM 'ways.parquet' WHERE list_has(tags, {'key': 'highway', 'value': 'm
 
 -- Or with tags as a Map:
 
-SELECT tags['name'], cardinality(tags) FROM testdata.parquet WHERE contains(tags, 'name') != 0 LIMIT 10;
+SELECT UNNEST(tags['name']), cardinality(tags) FROM nodes.parquet WHERE contains(tags, 'name') != 0 LIMIT 10;
 
+SELECT id, cardinality(tags) AS tag_count, tags FROM ways.parquet where cardinality(tags) != 0 limit 10;
 ```
 
-The following queries were run with version [v0.4.0 da9ee490d](https://github.com/duckdb/duckdb/releases/tag/v0.4.0) of duckdb. If you have any problems, please try at least this or a later version of duckdb. (0.2.9 for example, will not run all the queries successfully.)
+The following queries were run with version [0.5.1](https://github.com/duckdb/duckdb/releases/tag/v0.5.1) of duckdb. If you have any problems, please try at least this or a later version of duckdb. (0.2.9 for example, will not run all the queries successfully.)
 
 ### Profiling
 

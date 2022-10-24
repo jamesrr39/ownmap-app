@@ -46,10 +46,12 @@ const (
 var logger *logpkg.Logger
 
 func main() {
+	fs := gofs.NewOsFs()
+
 	if len(os.Args) == 1 {
 		logger = logpkg.NewLogger(os.Stderr, logpkg.LogLevelInfo)
 		// start in desktop "double-click" visual mode
-		err := setupDesktopMode()
+		err := setupDesktopMode(fs)
 		if err != nil {
 			log.Fatalf("failed to start server: %q\n%s\n", err.Error(), err.Stack())
 		}
@@ -63,7 +65,7 @@ func main() {
 		}
 		logger = logpkg.NewLogger(os.Stderr, logLevel)
 
-		setupServe()
+		setupServe(fs)
 		setupImport()
 
 		kingpin.Parse()
@@ -121,7 +123,7 @@ func loadStylesFromDir(dir string) (*styling.StyleSet, errorsx.Error) {
 	return styleSet, nil
 }
 
-func loadDBConnsFromDir(logger *logpkg.Logger, pathsConfig *ownmapdal.PathsConfig, ownmapDBFileHandlerLimit uint) (*ownmapdal.DBConnSet, errorsx.Error) {
+func loadDBConnsFromDir(logger *logpkg.Logger, fs gofs.Fs, pathsConfig *ownmapdal.PathsConfig, ownmapDBFileHandlerLimit uint) (*ownmapdal.DBConnSet, errorsx.Error) {
 	dirItems, err := ioutil.ReadDir(pathsConfig.DataDir)
 	if err != nil {
 		return nil, errorsx.Wrap(err)
@@ -130,7 +132,7 @@ func loadDBConnsFromDir(logger *logpkg.Logger, pathsConfig *ownmapdal.PathsConfi
 	var conns []ownmapdal.DataSourceConn
 	for _, dirItem := range dirItems {
 		filePath := filepath.Join(pathsConfig.DataDir, dirItem.Name())
-		dbConn, err := loadDBConn(filePath, ownmapDBFileHandlerLimit)
+		dbConn, err := loadDBConn(fs, filePath, ownmapDBFileHandlerLimit)
 		if err != nil {
 			logger.Error("failed to load %q as Bolt DB. Error: %q\nStack: %s", filePath, err.Error(), err.Stack())
 			continue
@@ -142,7 +144,7 @@ func loadDBConnsFromDir(logger *logpkg.Logger, pathsConfig *ownmapdal.PathsConfi
 	return ownmapdal.NewDBConnSet(conns), nil
 }
 
-func setupDesktopMode() errorsx.Error {
+func setupDesktopMode(fs gofs.Fs) errorsx.Error {
 	// TODO is the server already running?
 	var err error
 	pathsConfig, err := ensureDefaultPathsConfig()
@@ -155,13 +157,13 @@ func setupDesktopMode() errorsx.Error {
 		return errorsx.Wrap(err)
 	}
 
-	dbConns, err := loadDBConnsFromDir(logger, pathsConfig, DEFAULT_MAPMAKER_DB_FILE_HANDLER_LIMIT)
+	dbConns, err := loadDBConnsFromDir(logger, fs, pathsConfig, DEFAULT_MAPMAKER_DB_FILE_HANDLER_LIMIT)
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
 
 	shouldProfile := false
-	router, err := createServer(dbConns, styleSet, pathsConfig, logger, DEFAULT_MAPMAKER_DB_FILE_HANDLER_LIMIT, shouldProfile)
+	router, err := createServer(logger, fs, dbConns, styleSet, pathsConfig, DEFAULT_MAPMAKER_DB_FILE_HANDLER_LIMIT, shouldProfile)
 	if err != nil {
 		return errorsx.Wrap(err)
 	}
@@ -240,7 +242,7 @@ var addrHelp = fmt.Sprintf(
 	DEFAULT_PORT, DEFAULT_PORT, DEFAULT_PORT, DEFAULT_PORT,
 )
 
-func setupServe() {
+func setupServe(fs gofs.Fs) {
 	cmd := kingpin.Command("serve", "serve webserver")
 	addr := cmd.Flag("addr", addrHelp).Default(fmt.Sprintf(":%d", DEFAULT_PORT)).String()
 	dbFilePath := cmd.Arg("db-file", "DB file to read from").Required().String()
@@ -277,7 +279,7 @@ func setupServe() {
 
 			logger := logpkg.NewLogger(os.Stderr, logpkg.LogLevelDebug)
 
-			dbConn, err := loadDBConn(*dbFilePath, *ownmapDBFileHandlerLimit)
+			dbConn, err := loadDBConn(fs, *dbFilePath, *ownmapDBFileHandlerLimit)
 			if err != nil {
 				return errorsx.Wrap(err)
 			}
@@ -285,7 +287,7 @@ func setupServe() {
 			dbConnSet := ownmapdal.NewDBConnSet([]ownmapdal.DataSourceConn{dbConn})
 
 			// create the router
-			router, err := createServer(dbConnSet, styleSet, nil, logger, *ownmapDBFileHandlerLimit, *shouldProfile)
+			router, err := createServer(logger, fs, dbConnSet, styleSet, nil, *ownmapDBFileHandlerLimit, *shouldProfile)
 			if err != nil {
 				return errorsx.Wrap(err)
 			}
@@ -459,7 +461,7 @@ func setupImport() {
 			}
 
 		case ownmapdal.DBFileTypeParquet:
-			finalStorage, err = parquetdb.NewFinalStorage(dbConnConfig.ConnectionPath, pbfHeader, *parquetRowGroupSize)
+			finalStorage, err = parquetdb.NewFinalStorage(fs, dbConnConfig.ConnectionPath, pbfHeader, *parquetRowGroupSize)
 			if err != nil {
 				return errorsx.Wrap(err)
 			}
@@ -526,12 +528,12 @@ const (
 	adminPath = "admin"
 )
 
-func createServer(dbConns *ownmapdal.DBConnSet, styleSet *styling.StyleSet, pathsConfig *ownmapdal.PathsConfig, logger *logpkg.Logger, ownmapDBFileHandlerLimit uint, shouldProfile bool) (chi.Router, errorsx.Error) {
+func createServer(logger *logpkg.Logger, fs gofs.Fs, dbConns *ownmapdal.DBConnSet, styleSet *styling.StyleSet, pathsConfig *ownmapdal.PathsConfig, ownmapDBFileHandlerLimit uint, shouldProfile bool) (chi.Router, errorsx.Error) {
 	var err error
 
 	renderer := ownmaprenderer.NewRasterRenderer(fonts.DefaultFont())
 
-	adminService, err := webservices.NewAdminService(logger, pathsConfig, dbConns, ownmapdal.NewImportQueue(pathsConfig), adminPath, ownmapDBFileHandlerLimit)
+	adminService, err := webservices.NewAdminService(logger, fs, pathsConfig, dbConns, ownmapdal.NewImportQueue(pathsConfig), adminPath, ownmapDBFileHandlerLimit)
 	if err != nil {
 		return nil, errorsx.Wrap(err)
 	}
@@ -596,7 +598,7 @@ func runLogProgress(pbfReader *ownmapdal.DefaultPBFReader, finishedChan chan boo
 	}
 }
 
-func loadDBConn(dbConfigString string, ownmapDBFileHandlerLimit uint) (ownmapdal.DataSourceConn, errorsx.Error) {
+func loadDBConn(fs gofs.Fs, dbConfigString string, ownmapDBFileHandlerLimit uint) (ownmapdal.DataSourceConn, errorsx.Error) {
 	dbConnConfig, err := ownmapdal.ParseDBConnFilePath(dbConfigString)
 	if err != nil {
 		return nil, errorsx.Wrap(err, "db file path", dbConfigString)
@@ -617,7 +619,7 @@ func loadDBConn(dbConfigString string, ownmapDBFileHandlerLimit uint) (ownmapdal
 	case ownmapdal.DBFileTypePostgresql:
 		return ownmappostgresql.NewDBConn(dbConnConfig.ConnectionPath)
 	case ownmapdal.DBFileTypeParquet:
-		return parquetdb.NewParquetDatasource(dbConnConfig.ConnectionPath)
+		return parquetdb.NewDuckDBDataSourceConn(fs, dbConnConfig.ConnectionPath)
 	default:
 		return nil, errorsx.Errorf("unrecognized db connection type: %q", dbConnConfig.Type)
 	}

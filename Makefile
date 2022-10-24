@@ -53,7 +53,8 @@ run_dev_server__basic_style:
 
 .PHONY: run_dev_server__mapboxgl_styles_parquet
 run_dev_server__mapboxgl_styles_parquet:
-	CGO_ENABLED=0 go run cmd/ownmap-app-main.go serve parquet://data/data_files/parquet_files --default-style-id="basic" --extra-styles=data/styles/gl-style,data/styles/gl-style2
+# CGO_ENABLED=1 needed for duckdb dependency
+	CGO_ENABLED=1 go run cmd/ownmap-app-main.go serve parquet://data/data_files/parquet_files --default-style-id="basic" --extra-styles=data/styles/gl-style,data/styles/gl-style2
 
 
 # DEV_DOCKER_IMAGE=jamesrr39/run_dev_import_docker
@@ -76,7 +77,7 @@ DEV_IMPORT_BIG_DIR := data/dev_import_big/$(shell date +%Y-%m-%d_%H_%M_%S)
 DEV_IMPORT_BIG_TMP_DIR := data/dev_import_big/$(shell date +%Y-%m-%d_%H_%M_%S)/tmp
 
 # usage:
-# OSM_PBF_IMPORT_FILEPATH=data/sample-flie.osm.pbf make run_dev_import_parquet
+# OSM_PBF_IMPORT_FILEPATH=data/sample-file.osm.pbf make run_dev_import_parquet
 .PHONY: run_dev_import
 run_dev_import:
 	mkdir -p ${DEV_IMPORT_TMP_DIR}
@@ -90,7 +91,7 @@ run_dev_import:
 		--keep-work-dir
 
 # usage:
-# OSM_PBF_IMPORT_FILEPATH=data/sample-flie.osm.pbf make run_dev_import_parquet
+# OSM_PBF_IMPORT_FILEPATH=data/sample-file.osm.pbf make run_dev_import_parquet
 .PHONY: run_dev_import_parquet
 run_dev_import_parquet:
 	mkdir -p ${DEV_IMPORT_TMP_DIR}

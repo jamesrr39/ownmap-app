@@ -22,6 +22,7 @@ const (
 
 type AdminService struct {
 	logger                   *logpkg.Logger
+	fs                       gofs.Fs
 	pathsConfig              *ownmapdal.PathsConfig
 	dbConnSet                *ownmapdal.DBConnSet
 	importQueue              *ownmapdal.ImportQueue
@@ -32,6 +33,7 @@ type AdminService struct {
 
 func NewAdminService(
 	logger *logpkg.Logger,
+	fs gofs.Fs,
 	pathsConfig *ownmapdal.PathsConfig,
 	dbConnSet *ownmapdal.DBConnSet,
 	importQueue *ownmapdal.ImportQueue,
@@ -39,7 +41,7 @@ func NewAdminService(
 	ownmapDBFileHandlerLimit uint,
 ) (*AdminService, errorsx.Error) {
 
-	as := &AdminService{logger, pathsConfig, dbConnSet, importQueue, routerURLBasePath, ownmapDBFileHandlerLimit, chi.NewRouter()}
+	as := &AdminService{logger, fs, pathsConfig, dbConnSet, importQueue, routerURLBasePath, ownmapDBFileHandlerLimit, chi.NewRouter()}
 
 	as.Router.Get(fmt.Sprintf("/%s/{dbName}/*", dbPath), as.handleDBVisualisation)
 	as.Router.Get("/", as.handleGet)
@@ -90,8 +92,7 @@ func (as *AdminService) handlePostRawDataFile(w http.ResponseWriter, r *http.Req
 		importFunc = func(pbfReader, auxPbfReader ownmapdal.PBFReader) (ownmapdal.DataSourceConn, errorsx.Error) {
 			workDirPath := filepath.Join(as.pathsConfig.TempDir, time.Now().Format("import_2006-01-02_15_04_05"))
 
-			fs := gofs.NewOsFs()
-			err := fs.MkdirAll(workDirPath, 0700)
+			err := as.fs.MkdirAll(workDirPath, 0700)
 			if err != nil {
 				return nil, errorsx.Wrap(err)
 			}
@@ -103,7 +104,7 @@ func (as *AdminService) handlePostRawDataFile(w http.ResponseWriter, r *http.Req
 
 			importer, err := ownmapdb.NewFinalStorage(
 				as.logger,
-				fs,
+				as.fs,
 				workDirPath,
 				filepath.Join(as.pathsConfig.DataDir, formData.Filename+".ownmapdb"),
 				as.ownmapDBFileHandlerLimit,
@@ -118,7 +119,7 @@ func (as *AdminService) handlePostRawDataFile(w http.ResponseWriter, r *http.Req
 				as.logger,
 				pbfReader,
 				auxPbfReader,
-				fs,
+				as.fs,
 				importer,
 				ownmapdal.DefaultImporter2Opts(),
 			)

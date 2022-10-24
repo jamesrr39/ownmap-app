@@ -16,7 +16,7 @@ require (
 	github.com/llgcode/draw2d v0.0.0-20200930101115-bfaf5d914d1e
 	github.com/paulmach/osm v0.5.0
 	github.com/pkg/profile v1.5.0
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.8.0
 	github.com/xitongsys/parquet-go v1.6.2
 	github.com/xitongsys/parquet-go-source v0.0.0-20201108113611-f372b7d813be
 	golang.org/x/exp/errors v0.0.0-20201008143054-e3b2a7f2fdc7
@@ -36,7 +36,9 @@ require (
 	github.com/golang/snappy v0.0.3 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/klauspost/compress v1.13.6 // indirect
+	github.com/marcboeker/go-duckdb v1.0.5 // indirect
 	github.com/mattn/go-sqlite3 v1.14.9 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/paulmach/orb v0.7.1 // indirect
 	github.com/paulmach/protoscan v0.2.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.11 // indirect
@@ -49,5 +51,5 @@ require (
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

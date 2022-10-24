@@ -1,6 +1,8 @@
 package ownmap
 
 import (
+	fmt "fmt"
+
 	"github.com/jamesrr39/goutil/errorsx"
 	"github.com/paulmach/osm"
 )
@@ -67,6 +69,25 @@ func NewMapmakerTagsFromOSMTags(osmTags osm.Tags) []*OSMTag {
 		})
 	}
 	return tags
+}
+
+type TagMap map[string]string
+
+func TagListToTagMap(tagList []*OSMTag) TagMap {
+	if len(tagList) == 0 {
+		return nil
+	}
+
+	m := make(map[string]string)
+	for _, tagKVPair := range tagList {
+		_, ok := m[tagKVPair.Key]
+		if ok {
+			panic(fmt.Sprintf("tag key duplicate: %q. All tags: %#v", tagKVPair.Key, tagList))
+		}
+		m[tagKVPair.Key] = tagKVPair.Value
+	}
+
+	return m
 }
 
 func relationMemberTypeFromOSMMemberType(memberType osm.Type) (OSMRelationMember_OSMMemberType, errorsx.Error) {
