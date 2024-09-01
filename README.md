@@ -6,14 +6,19 @@ The aim of this project is to be able to provide a 1-file program that can gener
 
 The project contains:
 
-- A custom data file format, for storing data for quick retrieval and map tile creation. Parquet support is being worked [here](https://github.com/jamesrr39/ownmap-app/tree/parquet).
+- A custom data file format, for storing data in simple, on-disk files, for quick retrieval and map tile creation. (No database creation required.)
 - Support for different style types: a custom in-built style and partial support for MapBoxGL styles (with the idea to also support CartoCSS in the future).
 - A rasterer: for drawing tile images, given the data and style.
 - A web server, for handling a request for fetching a tile, with a given style, and returning the drawn style.
 
 ## Screenshots
 
-With the default style:
+With the default, inbuilt style:
+
+![Ownmap_Wendover_2024-09-01](https://github.com/user-attachments/assets/d77b4de7-d1d2-4f61-9897-939dbd3cd3bc)
+
+![Ownmap_Aylesbury_2024-09-01](https://github.com/user-attachments/assets/345ef255-68e6-45f9-8646-e7d0433a127b)
+
 
 ## Limitations
 
@@ -32,13 +37,13 @@ Then run `make run_dev_import`. This will read the pbf file and create a `ownmap
 
 You can then run `make run_dev_server__basic_style`. This will start a web server. In the logs you can see the address that it is serving on. Open up a web browser and go to that address. You will see an interactive slippy map with tiles being served from your tileserver.
 
-Here's an example:
+Here's an example. You will need wget, go, and make installed.
 
 ```
 mkdir -p data
 wget -O data/sample-pbf-file.pbf https://download.geofabrik.de/europe/united-kingdom/england/buckinghamshire-latest.osm.pbf
 make run_dev_import
-run_dev_server__basic_style
+make run_dev_server__basic_style
 # now open your web browser and navigate to http://localhost:9000
 ```
 
