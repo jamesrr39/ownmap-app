@@ -40,6 +40,7 @@ func (dbcs *DBConnSet) AddDBConn(conn DataSourceConn) {
 	dbcs.conns = append(dbcs.conns, conn)
 }
 
+//go:generate stringer -type=MatchLevel
 type MatchLevel int
 
 const (
@@ -84,7 +85,7 @@ func (dbcs *DBConnSet) GetConnsForBounds(bounds osm.Bounds) ([]*ChosenConnForBou
 			return nil, err
 		}
 
-		log.Printf("matchlevel: %v, file: %v\n", matchLevel, conn.Name())
+		log.Printf("matchlevel: %s, file: %v\n", matchLevel, conn.Name())
 
 		if matchLevel == MatchLevelNone {
 			continue

@@ -22,6 +22,10 @@ generate-protobufs:
 generate-static:
 	go run vendor/github.com/rakyll/statik/statik.go -src static_assets -dest staticassetsbundle
 
+.PHONY: generate-go
+generate-go:
+	go generate ./...
+
 .PHONY: test
 test:
 	go test ./...
