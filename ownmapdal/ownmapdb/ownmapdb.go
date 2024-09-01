@@ -226,30 +226,16 @@ func getNodesFoundFunc(nodeMap map[int64]*ownmap.OSMNode) onFoundBlockDataFuncTy
 			})
 
 			if searchResult != algorithms.SearchResultFound {
-				panic(fmt.Sprintf("key not found: %#v", key, keyInt64))
+				// node not found; it may have been requested by e.g. a way or relation, but it is not in the DB file.
+				// remove from the nodeMap
+				delete(nodeMap, keyInt64)
+				continue
 			}
 
 			node := blockData.Nodes[idx]
 
-			// FIXME: start debug: not needed
-			_, ok := nodeMap[node.ID]
-			if !ok {
-				panic(fmt.Sprintf("node found but not wanted: %#v", node))
-			}
-			// FIXME: end debug
-
 			nodeMap[node.ID] = node
 		}
-
-		// for _, node := range blockData.Nodes {
-		// 	_, ok := nodeMap[node.ID]
-		// 	if !ok {
-		// 		// node not wanted
-		// 		continue
-		// 	}
-
-		// 	nodeMap[node.ID] = node
-		// }
 
 		return nil
 	}
@@ -300,7 +286,10 @@ func getWaysFoundFunc(ctx context.Context, wayMap map[int64]*ownmap.OSMWay) onFo
 			})
 
 			if searchResult != algorithms.SearchResultFound {
-				panic(fmt.Sprintf("way: key not found: %#v", key, keyInt64))
+				// way not found; it may have been requested by e.g. a relation, but it is not in the DB file.
+				// remove from the wayMap
+				delete(wayMap, keyInt64)
+				continue
 			}
 
 			way := blockData.Ways[idx]
@@ -328,7 +317,11 @@ func getRelationsFoundFunc(relationMap map[int64]*ownmap.OSMRelation) onFoundBlo
 			})
 
 			if searchResult != algorithms.SearchResultFound {
-				panic(fmt.Sprintf("way: key not found: %#v", key, keyInt64))
+				// relation not found; it may have been requested by another (parent) relation, but it is not in the DB file.
+				// remove from the relationMap
+				delete(relationMap, keyInt64)
+				continue
+				// panic(fmt.Sprintf("way: key not found: %#v (int64: %v)", key, keyInt64))
 			}
 
 			relation := blockData.Relations[idx]
