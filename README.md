@@ -17,7 +17,9 @@ With the default, inbuilt style:
 
 ![Ownmap_Wendover_2024-09-01](https://github.com/user-attachments/assets/d77b4de7-d1d2-4f61-9897-939dbd3cd3bc)
 
-![Ownmap_Aylesbury_2024-09-01](https://github.com/user-attachments/assets/345ef255-68e6-45f9-8646-e7d0433a127b)
+With the "Bright" style from [OpenMapTiles.org](http://openmaptiles.org/):
+
+![Ownmap_Aylesbury_bright_style_2024-09-01](https://github.com/user-attachments/assets/e4739029-cf20-4977-8a49-447783766445)
 
 
 ## Limitations
