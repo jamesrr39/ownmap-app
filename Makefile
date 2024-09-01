@@ -74,6 +74,7 @@ DEV_IMPORT_BIG_TMP_DIR := data/dev_import_big/$(shell date +%Y-%m-%d_%H_%M_%S)/t
 .PHONY: run_dev_import
 run_dev_import:
 	mkdir -p ${DEV_IMPORT_TMP_DIR}
+	mkdir -p data/data_files
 	go build -o ${DEV_IMPORT_TMP_DIR}/ownmap-app cmd/ownmap-app-main.go
 	${DEV_IMPORT_TMP_DIR}/ownmap-app \
 		import \
