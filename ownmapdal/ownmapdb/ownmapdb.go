@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"reflect"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/jamesrr39/go-tracing"
@@ -472,7 +473,11 @@ func (db *MapmakerDBConn) addRelationsToRelationMap(
 	// make various data structures needed later in the function
 	var keys []KeyType
 
+	originalRelationMap := make(map[int64]*ownmap.OSMRelation)
+
 	for id, relation := range relationMap {
+		originalRelationMap[id] = relation
+
 		if relation != nil {
 			// skip this relation, it has already been fetched and added to the map
 			continue
@@ -493,7 +498,6 @@ func (db *MapmakerDBConn) addRelationsToRelationMap(
 		return errorsx.Wrap(err)
 	}
 
-	mustRescanRelations := false
 	for _, relation := range relationMap {
 		if relation == nil {
 			// skip; probably the relation we are looking for is outside the bounds of the data file
@@ -507,18 +511,36 @@ func (db *MapmakerDBConn) addRelationsToRelationMap(
 				wayMap[member.ObjectID] = nil
 			case ownmap.OSM_MEMBER_TYPE_RELATION:
 				relationMap[member.ObjectID] = nil
-				mustRescanRelations = true
 			default:
 				return errorsx.Errorf("unrecognized member type: %v", member.MemberType)
 			}
 		}
 	}
 
-	if mustRescanRelations {
+	if mustRescanRelations(originalRelationMap, relationMap) {
 		return db.addRelationsToRelationMap(file, relationMap, wayMap, nodeMap)
 	}
 
 	return nil
+}
+
+func mustRescanRelations(originalRelationMap, newRelationMap map[int64]*ownmap.OSMRelation) bool {
+	if len(originalRelationMap) != len(newRelationMap) {
+		return true
+	}
+
+	for k, vOldMap := range originalRelationMap {
+		vNewMap, okNewMap := newRelationMap[k]
+		if !okNewMap {
+			return true
+		}
+
+		if !reflect.DeepEqual(vOldMap, vNewMap) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, filter *ownmapdal.GetInBoundsFilter) (ownmapdal.TagNodeMap, ownmapdal.TagWayMap, ownmapdal.TagRelationMap, errorsx.Error) {
@@ -616,6 +638,9 @@ func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, fi
 	}
 
 	for _, node := range nodeMap {
+		if node == nil {
+			continue
+		}
 		for _, tag := range node.Tags {
 			tagKey := ownmap.TagKey(tag.Key)
 			_, ok := nodeTagMap[tagKey]
@@ -629,6 +654,9 @@ func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, fi
 	}
 
 	for _, way := range wayMap {
+		if way == nil {
+			continue
+		}
 		for _, tag := range way.Tags {
 			tagKey := ownmap.TagKey(tag.Key)
 			_, ok := wayTagMap[tagKey]
@@ -642,6 +670,9 @@ func (db *MapmakerDBConn) GetInBounds(ctx context.Context, bounds osm.Bounds, fi
 	}
 
 	for _, relation := range relationMap {
+		if relation == nil {
+			continue
+		}
 		for _, tag := range relation.Tags {
 			tagKey := ownmap.TagKey(tag.Key)
 			_, ok := relationTagMap[tagKey]
